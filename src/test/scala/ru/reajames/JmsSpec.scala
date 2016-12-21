@@ -1,5 +1,6 @@
 package ru.reajames
 
+import Jms._
 import javax.jms._
 import scala.util._
 import org.scalatest._
@@ -10,8 +11,8 @@ import org.apache.activemq._
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 20.12.16 0:36.
   */
-class JmsSpec extends FlatSpec with Matchers with Jms {
-  val connectionFactory = new ActiveMQConnectionFactory("vm://test-broker?broker.persistent=false")
+class JmsSpec extends FlatSpec with Matchers {
+  val connectionFactory = new ActiveMQConnectionFactory("vm://test-broker?broker.persistent=false&broker.useJmx=false")
 
   "Jms" should "sucessfully create connection" in {
     connection(connectionFactory) should matchPattern {
@@ -65,7 +66,7 @@ class JmsSpec extends FlatSpec with Matchers with Jms {
       d <- destination(s, Queue("queue"))
       p <- producer(s, d)
     }
-      messages.map(_.toString).map(text2text(s)).foreach(send(p, _))
+      messages.map(_.toString).map(string2textMessage(s)).foreach(send(p, _))
 
     for {
       c <- connection(connectionFactory)

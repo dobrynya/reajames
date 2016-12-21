@@ -8,16 +8,7 @@ import scala.util.Try
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 19.12.16 23:24.
   */
-trait Jms {
-
-  /**
-    * Represents a function to convert an element of data to a JMS message.
-    * @tparam T data type
-    * @tparam M message type
-    */
-  type MessageFactory[T, M <: Message] = Session => T => M
-
-  val text2text: MessageFactory[String, TextMessage] = session => text => session.createTextMessage(text)
+object Jms {
 
   /**
     * Creates a connection with the specified connection factory.
@@ -119,8 +110,6 @@ trait Jms {
   def send(producer: MessageProducer, message: Message, destination: Option[Destination] = None): Try[Message] =
     Try(destination.map(producer.send(_, message)).getOrElse(producer.send(message))).map(_ => message)
 }
-
-sealed trait DestinationFactory extends (Session => Destination)
 
 case class Queue(name: String) extends DestinationFactory {
   def apply(session: Session): Destination = session.createQueue(name)
