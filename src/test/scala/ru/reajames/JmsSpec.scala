@@ -59,14 +59,16 @@ class JmsSpec extends FlatSpec with Matchers {
   }
 
   it should "consume messages published to a destination" in {
-    val messages = 1 to 10
+    val messages = (1 to 10).map(_.toString).toList
     for {
       c <- connection(connectionFactory)
       s <- session(c)
       d <- destination(s, Queue("queue"))
       p <- producer(s, d)
+    } {
+      messages.map(string2textMessage(s)).foreach(send(p, _))
+      close(c)
     }
-      messages.map(_.toString).map(string2textMessage(s)).foreach(send(p, _))
 
     for {
       c <- connection(connectionFactory)
@@ -74,11 +76,13 @@ class JmsSpec extends FlatSpec with Matchers {
       s <- session(c)
       d <- destination(s, Queue("queue"))
       consumer <- consumer(s, d)
-    }
+    } {
       messages.map(_ -> receive(consumer)).collect {
         case (i, Success(Some(message: TextMessage))) =>
           println("Received %s - %s".format(i, message))
-          message.getText.toInt
-      }.toSet should equal(Set(messages :_*))
+          message.getText
+      } should equal(messages)
+      close(c)
+    }
   }
 }

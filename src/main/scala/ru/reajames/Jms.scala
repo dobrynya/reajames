@@ -104,25 +104,8 @@ object Jms {
     * Sends a message with the specified producer.
     * @param producer specifies producer to send a message
     * @param message specifies message to be sent
-    * @param destination specifies destination, if none is specified default destination will be used
-    * @return success or failure
+    * @return sent message or failure
     */
-  def send(producer: MessageProducer, message: Message, destination: Option[Destination] = None): Try[Message] =
-    Try(destination.map(producer.send(_, message)).getOrElse(producer.send(message))).map(_ => message)
-}
-
-case class Queue(name: String) extends DestinationFactory {
-  def apply(session: Session): Destination = session.createQueue(name)
-}
-
-case class Topic(name: String) extends DestinationFactory {
-  def apply(session: Session): Destination = session.createTopic(name)
-}
-
-case object TemporaryTopic extends DestinationFactory {
-  def apply(session: Session): Destination = session.createTemporaryTopic()
-}
-
-case object TemporaryQueue extends DestinationFactory {
-  def apply(session: Session): Destination = session.createTemporaryQueue()
+  def send(producer: MessageProducer, message: Message): Try[Message] =
+    Try(producer.send(message)).map(_ => message)
 }
