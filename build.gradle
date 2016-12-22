@@ -11,7 +11,7 @@ repositories {
 dependencies {
     compile "org.scala-lang:scala-library:2.12+"
     compile "com.typesafe.akka:akka-stream_2.12:2+"
-    compile "ch.qos.logback:logback-classic:1.1.8"
+    compile "ch.qos.logback:logback-classic:+"
     compile "org.apache.geronimo.specs:geronimo-jms_1.1_spec:1.1+"
 
     testCompile "org.apache.activemq:activemq-broker:+"
