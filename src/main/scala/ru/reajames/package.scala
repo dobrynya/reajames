@@ -20,6 +20,7 @@ package object reajames {
     */
   case class Queue(name: String) extends DestinationFactory {
     def apply(session: Session): Destination = session.createQueue(name)
+    override def toString: String = "Queue(%s)" format name
   }
 
   /**
@@ -28,6 +29,7 @@ package object reajames {
     */
   case class Topic(name: String) extends DestinationFactory {
     def apply(session: Session): Destination = session.createTopic(name)
+    override def toString: String = "Topic(%s)" format name
   }
 
   /**
@@ -35,6 +37,7 @@ package object reajames {
     */
   case object TemporaryQueue extends DestinationFactory {
     def apply(session: Session): Destination = session.createTemporaryQueue()
+    override def toString: String = "TemporaryQueue"
   }
 
   /**
@@ -42,6 +45,7 @@ package object reajames {
     */
   case object TemporaryTopic extends DestinationFactory {
     def apply(session: Session): Destination = session.createTemporaryTopic()
+    override def toString: String = "TemporaryTopic"
   }
 
   /**

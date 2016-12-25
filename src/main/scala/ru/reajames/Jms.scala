@@ -14,14 +14,18 @@ object Jms {
     * Creates a connection with the specified connection factory.
     * @param connectionFactory specifies a factory for connection
     * @param credentials specifies user name and password
+    * @param clientId specifies client identifier to set on created connection
     * @return created connection or failure
     */
   def connection(connectionFactory: ConnectionFactory,
-                 credentials: Option[(String, String)] = None) = Try {
+                 credentials: Option[(String, String)] = None, clientId: Option[String] = None): Try[Connection] = Try {
     credentials
       .map {
         case (user, passwd) => connectionFactory.createConnection(user, passwd)
       }.getOrElse(connectionFactory.createConnection())
+  }.map { c =>
+    clientId.foreach(c.setClientID)
+    c
   }
 
   /**
@@ -90,6 +94,14 @@ object Jms {
     */
   def producer(session: Session, destination: Destination): Try[MessageProducer] =
     Try(session.createProducer(destination))
+
+  /**
+    * Creates a message producer by the specified session.
+    * @param session specifies the session to create producer
+    * @return created producer which has no specific destination or failure
+    */
+  @inline
+  def producer(session: Session): Try[MessageProducer] = producer(session, null)
 
   /**
     * Receives an arrived message.

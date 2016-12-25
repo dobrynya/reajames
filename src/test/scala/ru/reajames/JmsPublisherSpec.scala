@@ -3,10 +3,9 @@ package ru.reajames
 import Jms._
 import org.scalatest._
 import javax.jms.TextMessage
-import java.util.concurrent.Executors
-import scala.concurrent.ExecutionContext
 import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.activemq.ActiveMQConnectionFactory
+import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Specification on JmsPublisher.
@@ -14,8 +13,8 @@ import org.apache.activemq.ActiveMQConnectionFactory
   *         Created at 21.12.16 1:41.
   */
 class JmsPublisherSpec extends FlatSpec with Matchers with JmsUtilities {
-  private implicit val connectionFactory = new ActiveMQConnectionFactory("vm://test-broker?broker.persistent=false&broker.useJmx=false")
-  private implicit val ec = ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
+  private implicit val connectionFactory =
+    new ActiveMQConnectionFactory("vm://test-broker?broker.persistent=false&broker.useJmx=false")
 
   "JmsPublisher" should "raise an exception in case whether subscriber is not specified" in {
     val queue = Queue("queue-5")
@@ -31,8 +30,9 @@ class JmsPublisherSpec extends FlatSpec with Matchers with JmsUtilities {
     pub.subscribe(TestSubscriber(
       request = Some(Long.MaxValue),
       next = { (s, msg) =>
-        received ::= msg.asInstanceOf[TextMessage].getText
-        if (received.head == "500") s.cancel()
+        val text = msg.asInstanceOf[TextMessage].getText
+        received ::= text
+        if (text == "500") s.cancel()
       }
     ))
 

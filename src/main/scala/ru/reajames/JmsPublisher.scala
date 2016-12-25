@@ -18,7 +18,7 @@ class JmsPublisher(connectionFactory: ConnectionFactory, destinationFactory: Des
 
   def subscribe(subscriber: Subscriber[_ >: Message]): Unit = {
     if (subscriber == null)
-      throw new NullPointerException("Subscriber should not be null!")
+      throw new NullPointerException("Subscriber should be specified!")
 
     val subscription = for {
       c <- connection(connectionFactory)
@@ -30,19 +30,24 @@ class JmsPublisher(connectionFactory: ConnectionFactory, destinationFactory: Des
       val cancelled = new AtomicBoolean(false)
       val requested = new AtomicLong(0)
 
-      def cancel(): Unit = {
-        logger.debug("Cancelling subscription {}", this)
-        cancelled.set(true)
-        close(consumer).flatMap(_ => close(c))
-      }
+      def cancel(): Unit =
+        if (cancelled.compareAndSet(false, true)) {
+          close(consumer).flatMap(_ => close(c))
+            .map(_ => if (requested.get() == 0) subscriber.onComplete()) recover {
+            case th => logger.error("An error occurred during closing connection!", th)
+          }
+
+          logger.debug("Cancelled subscription {}", this)
+        }
 
       @tailrec
       def receiveMessage(): Unit =
         if (!cancelled.get()) {
-          receive(consumer) match {
-            case Success(Some(msg)) => subscriber.onNext(msg)
-            case Success(None) => subscriber.onComplete() // consumer and connection already have been closed
-            case Failure(th) =>
+          receive(consumer).map {
+            case Some(msg) => subscriber.onNext(msg)
+            case None => subscriber.onComplete()
+          } recover {
+            case th =>
               cancel()
               subscriber.onError(th)
           }
@@ -55,7 +60,6 @@ class JmsPublisher(connectionFactory: ConnectionFactory, destinationFactory: Des
           throw new IllegalArgumentException("Requested items should be greater then 0!")
         else if (requested.getAndAdd(n) == 0)
           executionContext.execute(() => receiveMessage())
-
       }
 
       override def toString: String = "JmsSubscription(%s,%s)".format(connectionFactory, destinationFactory)
