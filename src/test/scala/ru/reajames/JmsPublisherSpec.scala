@@ -1,11 +1,12 @@
 package ru.reajames
 
-import Jms._
 import org.scalatest._
 import javax.jms.TextMessage
 import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.activemq.ActiveMQConnectionFactory
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
 
 /**
   * Specification on JmsPublisher.
@@ -24,7 +25,7 @@ class JmsPublisherSpec extends FlatSpec with Matchers with JmsUtilities {
 
   it should "publish messages arrived to a JMS queue" in {
     val queue = Queue("queue-6")
-    val pub = new JmsPublisher(connectionFactory, queue)
+    val pub = stopper(new JmsPublisher(connectionFactory, queue), 500)
 
     var received = List.empty[String]
     pub.subscribe(TestSubscriber(
@@ -32,12 +33,13 @@ class JmsPublisherSpec extends FlatSpec with Matchers with JmsUtilities {
       next = { (s, msg) =>
         val text = msg.asInstanceOf[TextMessage].getText
         received ::= text
-        if (text == "500") s.cancel()
       }
     ))
 
     val expected = (1 to 500).map(_.toString).toList
     sendMessages(expected, string2textMessage, queue)
+
+    Await.ready(pub.completed, Duration.Inf)
     received.reverse should equal(expected)
   }
 
