@@ -10,11 +10,17 @@ repositories {
 
 dependencies {
     compile "org.scala-lang:scala-library:2.12+"
-    compile "com.typesafe.akka:akka-stream_2.12:2+"
+    compile "org.reactivestreams:reactive-streams:1.0.0"
     compile "ch.qos.logback:logback-classic:+"
     compile "org.apache.geronimo.specs:geronimo-jms_1.1_spec:1.1+"
 
-    testCompile "org.apache.activemq:activemq-broker:+"
     testCompile "org.scalatest:scalatest_2.12:3+"
+    testCompile "org.apache.activemq:activemq-broker:+"
+    testCompile "com.typesafe.akka:akka-stream_2.12:2+"
+    testCompile("net.timewalker.ffmq:ffmq4-server:4.0.0") {
+        exclude module: "jms"
+        exclude module: "log4j"
+    }
+    testRuntime "org.slf4j:log4j-over-slf4j:+"
     testRuntime "org.pegdown:pegdown:1.6.0"
 }

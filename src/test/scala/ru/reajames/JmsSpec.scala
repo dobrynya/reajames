@@ -11,8 +11,8 @@ import org.apache.activemq._
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 20.12.16 0:36.
   */
-class JmsSpec extends FlatSpec with Matchers {
-  val connectionFactory = new ActiveMQConnectionFactory("vm://test-broker?broker.persistent=false&broker.useJmx=false")
+trait JmsSpec extends Matchers { this: FlatSpec =>
+  def connectionFactory: ConnectionFactory
 
   "Jms" should "sucessfully create connection" in {
     connection(connectionFactory) should matchPattern {
@@ -25,6 +25,7 @@ class JmsSpec extends FlatSpec with Matchers {
       c <- connection(connectionFactory)
       _ <- start(c)
       _ <- stop(c)
+      _ <- close(c)
     } yield ()) should matchPattern {
       case Success(_) =>
     }
