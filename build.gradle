@@ -10,8 +10,8 @@ repositories {
 
 dependencies {
     compile "org.scala-lang:scala-library:2.12+"
-    compile "org.reactivestreams:reactive-streams:1.0.0"
-    compile "ch.qos.logback:logback-classic:+"
+    compile "org.reactivestreams:reactive-streams:1+"
+    compile "org.slf4j:slf4j-api:+"
     compile "org.apache.geronimo.specs:geronimo-jms_1.1_spec:1.1+"
 
     testCompile "org.scalatest:scalatest_2.12:3+"
@@ -21,6 +21,7 @@ dependencies {
         exclude module: "jms"
         exclude module: "log4j"
     }
+    testRuntime "ch.qos.logback:logback-classic:+"
     testRuntime "org.slf4j:log4j-over-slf4j:+"
     testRuntime "org.pegdown:pegdown:1.6.0"
 }
