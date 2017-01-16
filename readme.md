@@ -1,5 +1,7 @@
 ReaJaMeS is JMS in terms of [Reactive Streams](http://www.reactive-streams.org)
 ====
+[![Travis](https://travis-ci.org/dobrynya/reajames.svg?branch=master)](https://travis-ci.org/dobrynya/reajames)
+
 The project is aimed to implementing a JMS client in terms of the Reactive Streams. Anyone can use the library for integrating JMS transport as non-blocking reactive streams identical to other RS implementations.
 
 To subscriber a listener for a queue
