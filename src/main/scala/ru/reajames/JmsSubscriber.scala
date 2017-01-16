@@ -14,8 +14,7 @@ import javax.jms.{Connection, ConnectionFactory, MessageProducer, Session}
   */
 class JmsSubscriber[T](connectionFactory: ConnectionFactory,
                        destinationFactory: DestinationFactory,
-                       messageFactory: MessageFactory[T],
-                       request: Long = 1000)
+                       messageFactory: MessageFactory[T])
                       (implicit executionContext: ExecutionContext) extends Subscriber[T] with Logging {
   var context: Context = _
 
@@ -39,7 +38,7 @@ class JmsSubscriber[T](connectionFactory: ConnectionFactory,
       case Success(ctx) =>
         logger.debug("Successfully connected to {} at {}", destinationFactory.asInstanceOf[Any], connectionFactory)
         context = ctx
-        subscription.request(Long.MaxValue)
+        subscription.request(1)
       case Failure(th) =>
         logger.error("Could not establish connection to #destinationFactory at $connectionFactory!", th)
         subscription.cancel()
@@ -56,9 +55,13 @@ class JmsSubscriber[T](connectionFactory: ConnectionFactory,
       send(context.producer, messageFactory(context.session)(e)) match {
         case Success(msg) =>
           logger.debug("Sent a message {}", msg)
+          context.subscription.request(1)
         case Failure(th) =>
           logger.warn(s"Could not send a message to $destinationFactory at $connectionFactory, closing connection!", th)
-          close(context.connection)
+          close(context.connection).recover {
+            case throwable => logger.error("An error occurred during closing connection!", throwable)
+          }
+          context.subscription.cancel()
       }
   }
 

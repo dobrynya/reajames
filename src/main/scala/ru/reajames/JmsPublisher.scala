@@ -32,17 +32,18 @@ class JmsPublisher(connectionFactory: ConnectionFactory, destinationFactory: Des
 
       def cancel(): Unit =
         if (cancelled.compareAndSet(false, true)) {
-          close(consumer).flatMap(_ => close(c))
-            .map(_ => if (requested.get() == 0) subscriber.onComplete()) recover {
+          if (requested.get() == 0) subscriber.onComplete() // no receiving thread so explicitly complete subscriber
+          close(consumer).recover {
+            case th => logger.warn("An error occurred during closing consumer!", th)
+          }
+          close(c).recover {
             case th => logger.error("An error occurred during closing connection!", th)
           }
-
           logger.debug("Cancelled subscription {}", this)
         }
 
       @tailrec
-      def receiveMessage(): Unit =
-        if (!cancelled.get()) {
+      def receiveMessage(): Unit = {
           receive(consumer).map {
             case Some(msg) => subscriber.onNext(msg)
             case None => subscriber.onComplete()
@@ -51,7 +52,7 @@ class JmsPublisher(connectionFactory: ConnectionFactory, destinationFactory: Des
               cancel()
               subscriber.onError(th)
           }
-          if (requested.decrementAndGet() > 0) receiveMessage()
+          if (requested.decrementAndGet() > 0 && !cancelled.get()) receiveMessage()
         }
 
       def request(n: Long): Unit = {

@@ -59,6 +59,26 @@ trait JmsSpec extends Matchers { this: FlatSpec =>
     }
   }
 
+  it should "send a message to the specified destination" in {
+    val q = Queue("specified-destination-6546")
+    for {
+      c <- connection(connectionFactory)
+      _ <- start(c)
+      s <- session(c)
+      p <- producer(s)
+      d <- destination(s, q)
+      m <- Try(s.createTextMessage("created message"))
+      _ <- send(p, m)
+      cons <- consumer(s, d)
+      received <- receive(cons)
+      _ <- close(c)
+    } {
+      received should matchPattern {
+        case Some(msg: TextMessage) if msg.getText == "created message" =>
+      }
+    }
+  }
+
   it should "consume messages published to a destination" in {
     val messages = (1 to 10).map(_.toString).toList
     for {
