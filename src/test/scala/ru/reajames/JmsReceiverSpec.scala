@@ -13,19 +13,19 @@ import scala.concurrent.duration.Duration
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 21.12.16 1:41.
   */
-class JmsPublisherSpec extends FlatSpec with Matchers with JmsUtilities {
+class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities {
   private implicit val connectionFactory =
     new ActiveMQConnectionFactory("vm://test-broker?broker.persistent=false&broker.useJmx=false")
 
-  "JmsPublisher" should "raise an exception in case whether subscriber is not specified" in {
+  "JmsReceiver" should "raise an exception in case whether subscriber is not specified" in {
     val queue = Queue("queue-5")
-    val pub = new JmsPublisher(connectionFactory, queue)
+    val pub = new JmsReceiver(connectionFactory, queue)
     intercept[NullPointerException](pub.subscribe(null))
   }
 
   it should "publish messages arrived to a JMS queue" in {
     val queue = Queue("queue-6")
-    val pub = stopper(new JmsPublisher(connectionFactory, queue), 500)
+    val pub = stopper(new JmsReceiver(connectionFactory, queue), 500)
 
     var received = List.empty[String]
     pub.subscribe(TestSubscriber(
@@ -45,7 +45,7 @@ class JmsPublisherSpec extends FlatSpec with Matchers with JmsUtilities {
 
   it should "not call subscriber concurrently" in {
     val queue = Queue("queue-7")
-    val pub = new JmsPublisher(connectionFactory, queue)
+    val pub = new JmsReceiver(connectionFactory, queue)
 
     var checked = true
     val called = new AtomicBoolean(false)
@@ -70,7 +70,7 @@ class JmsPublisherSpec extends FlatSpec with Matchers with JmsUtilities {
 
   it should "receive only requested amount of messages" in {
     val topic = Topic("topic-8")
-    val pub = new JmsPublisher(connectionFactory, topic)
+    val pub = new JmsReceiver(connectionFactory, topic)
 
     @volatile var counter = 0
     pub.subscribe(TestSubscriber(request = Some(100), next = (s, msg) => counter += 1))
@@ -83,7 +83,7 @@ class JmsPublisherSpec extends FlatSpec with Matchers with JmsUtilities {
   it should "publish messages from a topic to different subscribers" in {
     var res1, res2 = List.empty[String]
     val topic = Topic("topic-10")
-    val pub = new JmsPublisher(connectionFactory, topic)
+    val pub = new JmsReceiver(connectionFactory, topic)
     pub.subscribe(TestSubscriber(
       request = Some(100),
       next = (s, msg) => res1 ::= msg.asInstanceOf[TextMessage].getText

@@ -1,10 +1,8 @@
 package ru.reajames
 
 import Jms._
-import javax.jms.{ConnectionFactory, Message}
-
-import org.reactivestreams.{Processor, Publisher, Subscriber, Subscription}
-
+import javax.jms._
+import org.reactivestreams._
 import scala.concurrent.{Future, Promise}
 
 /**
@@ -42,7 +40,7 @@ trait JmsUtilities {
     * @param messagesToReceive amount of messages to receive, infinite by default
     * @return newly created spy publisher
     */
-  def stopper(publisher: JmsPublisher, messagesToReceive: Long = Long.MaxValue) =
+  def stopper(publisher: JmsReceiver, messagesToReceive: Long = Long.MaxValue) =
     new Publisher[Message]  {
       private var counter = messagesToReceive
       private val allPublished: Promise[Boolean] = Promise()
@@ -80,9 +78,5 @@ trait JmsUtilities {
       }
 
       def completed: Future[Boolean] = allPublished.future
-  }
-
-  trait FakePublisher extends Subscription{
-    def completed: Future[Boolean]
   }
 }

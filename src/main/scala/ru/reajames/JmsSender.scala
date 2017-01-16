@@ -12,10 +12,10 @@ import javax.jms.{Connection, ConnectionFactory, MessageProducer, Session}
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 22.12.16 3:49.
   */
-class JmsSubscriber[T](connectionFactory: ConnectionFactory,
-                       destinationFactory: DestinationFactory,
-                       messageFactory: MessageFactory[T])
-                      (implicit executionContext: ExecutionContext) extends Subscriber[T] with Logging {
+class JmsSender[T](connectionFactory: ConnectionFactory,
+                   destinationFactory: DestinationFactory,
+                   messageFactory: MessageFactory[T])
+                  (implicit executionContext: ExecutionContext) extends Subscriber[T] with Logging {
   var context: Context = _
 
   def onError(th: Throwable): Unit = {

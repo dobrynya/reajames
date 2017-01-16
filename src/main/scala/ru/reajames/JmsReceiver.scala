@@ -13,8 +13,8 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 21.12.16 0:14.
   */
-class JmsPublisher(connectionFactory: ConnectionFactory, destinationFactory: DestinationFactory)
-                  (implicit executionContext: ExecutionContext) extends Publisher[Message] with Logging {
+class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: DestinationFactory)
+                 (implicit executionContext: ExecutionContext) extends Publisher[Message] with Logging {
 
   def subscribe(subscriber: Subscriber[_ >: Message]): Unit = {
     if (subscriber == null)
