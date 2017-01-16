@@ -13,7 +13,8 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 21.12.16 0:14.
   */
-class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: DestinationFactory)
+class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: DestinationFactory,
+                  credentials: Option[(String, String)] = None, clientId: Option[String] = None)
                  (implicit executionContext: ExecutionContext) extends Publisher[Message] with Logging {
 
   def subscribe(subscriber: Subscriber[_ >: Message]): Unit = {
@@ -21,7 +22,7 @@ class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: Dest
       throw new NullPointerException("Subscriber should be specified!")
 
     val subscription = for {
-      c <- connection(connectionFactory)
+      c <- connection(connectionFactory, credentials, clientId)
       _ <- start(c)
       s <- session(c)
       d <- destination(s, destinationFactory)
@@ -37,7 +38,7 @@ class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: Dest
             case th => logger.warn("An error occurred during closing consumer!", th)
           }
           close(c).recover {
-            case th => logger.error("An error occurred during closing connection!", th)
+            case th => logger.warn("An error occurred during closing connection!", th)
           }
           logger.debug("Cancelled subscription {}", this)
         }
@@ -58,12 +59,12 @@ class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: Dest
       def request(n: Long): Unit = {
         logger.debug("Requested {} from {}", n, this)
         if (n <= 0)
-          throw new IllegalArgumentException("Requested items should be greater then 0!")
+          throw new IllegalArgumentException(s"Wrong requested items amount $n!")
         else if (requested.getAndAdd(n) == 0)
           executionContext.execute(() => receiveMessage())
       }
 
-      override def toString: String = "JmsSubscription(%s,%s)".format(connectionFactory, destinationFactory)
+      override def toString: String = "JmsReceiver(%s,%s)".format(connectionFactory, destinationFactory)
     }
 
     subscription match {

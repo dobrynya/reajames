@@ -2,11 +2,12 @@ package ru.reajames
 
 import org.scalatest._
 import javax.jms.TextMessage
+import scala.concurrent.Await
+import scala.language.reflectiveCalls
+import scala.concurrent.duration.Duration
 import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.activemq.ActiveMQConnectionFactory
-import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.Duration
 
 /**
   * Specification on JmsPublisher.
@@ -82,7 +83,7 @@ class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities {
 
   it should "publish messages from a topic to different subscribers" in {
     var res1, res2 = List.empty[String]
-    val topic = Topic("topic-10")
+    val topic = Topic("topic-9")
     val pub = new JmsReceiver(connectionFactory, topic)
     pub.subscribe(TestSubscriber(
       request = Some(100),
@@ -95,6 +96,9 @@ class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities {
 
     val msgs = (1 to 100).map(_.toString)
     sendMessages(msgs, string2textMessage, topic)
+
+    Thread.sleep(1000) // TODO: Implement another waiting strategy!
+
     res1 should equal(msgs.reverse)
     res2 should equal(msgs.reverse)
   }
