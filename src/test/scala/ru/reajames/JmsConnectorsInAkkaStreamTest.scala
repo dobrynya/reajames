@@ -67,7 +67,7 @@ class JmsConnectorsInAkkaStreamTest extends FlatSpec with Matchers with BeforeAn
     val sender = new JmsSender[String](connectionFactory, sendMessagesToDifferentQueues)
     Source(messagesToSend).runWith(Sink.fromSubscriber(sender))
 
-    whenReady(received, timeout(Span(5, Seconds))) {
+    whenReady(received, timeout(Span(10, Seconds))) {
       _ == messagesToSend
     }
   }
@@ -96,7 +96,7 @@ class JmsConnectorsInAkkaStreamTest extends FlatSpec with Matchers with BeforeAn
     val sender = new JmsSender[String](connectionFactory, sendReplyToHeader)
     Source(messagesToSend).runWith(Sink.fromSubscriber(sender))
 
-    whenReady(messagesReceivedByClients, timeout(Span(10, Seconds))) {
+    whenReady(messagesReceivedByClients, timeout(Span(15, Seconds))) {
       _ == messagesToSend
     }
   }

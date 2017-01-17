@@ -1,8 +1,12 @@
 package ru.reajames
 
+import java.util.concurrent.CountDownLatch
+
 import Jms._
 import javax.jms._
+
 import org.reactivestreams._
+
 import scala.concurrent.{Future, Promise}
 import scala.language.implicitConversions
 
@@ -53,11 +57,18 @@ trait JmsUtilities {
       private val allPublished: Promise[Boolean] = Promise()
 
       private var real: Subscriber[_ >: Message] = _
-      private val fake = TestSubscriber(next = (s, m) => next(m), complete = () => complete(), error = (th) => error(th))
+      private val subscribed = new CountDownLatch(1)
+      private val fake = TestSubscriber(
+        subscribe = subscription => subscribed.countDown(),
+        next = (s, m) => next(m),
+        complete = () => complete(),
+        error = (th) => error(th)
+      )
       publisher.subscribe(fake)
 
       def subscribe(s: Subscriber[_ >: Message]): Unit = {
         real = s
+        subscribed.await()
         s.onSubscribe(new Subscription {
           def cancel(): Unit = fake.subscription.cancel()
           def request(n: Long): Unit = fake.subscription.request(n)

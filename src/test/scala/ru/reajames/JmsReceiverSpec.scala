@@ -1,12 +1,17 @@
 package ru.reajames
 
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+
 import org.scalatest._
 import javax.jms.TextMessage
+
 import scala.concurrent.Await
 import scala.language.reflectiveCalls
 import scala.concurrent.duration.Duration
 import java.util.concurrent.atomic.AtomicBoolean
+
 import org.apache.activemq.ActiveMQConnectionFactory
+
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -67,13 +72,26 @@ class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities with Acti
   }
 
   it should "receive only requested amount of messages" in {
+    val subscribed = new CountDownLatch(1)
+    val received = new CountDownLatch(100)
+
     val topic = Topic("topic-8")
     val pub = new JmsReceiver(connectionFactory, topic)
 
     @volatile var counter = 0
-    pub.subscribe(TestSubscriber(request = Some(100), next = (s, msg) => counter += 1))
+    pub.subscribe(TestSubscriber(
+      subscribe = subscription => subscribed.countDown(),
+      request = Some(100),
+      next = (s, msg) => {
+        counter += 1
+        received.countDown()
+      }
+    ))
 
+    subscribed.await(1, TimeUnit.SECONDS)
     sendMessages((1 to 200).map(_.toString), string2textMessage, topic)
+
+    received.await(5, TimeUnit.SECONDS)
 
     counter should equal(100)
   }
@@ -81,20 +99,33 @@ class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities with Acti
   it should "publish messages from a topic to different subscribers" in {
     var res1, res2 = List.empty[String]
     val topic = Topic("topic-9")
+    val consumingLatch = new CountDownLatch(200)
+    val subscribed = new CountDownLatch(2)
+
     val pub = new JmsReceiver(connectionFactory, topic)
-    pub.subscribe(TestSubscriber(
-      request = Some(100),
-      next = (s, msg) => res1 ::= msg.asInstanceOf[TextMessage].getText
+    pub.subscribe(
+      TestSubscriber(
+        subscribe = subsciption => subscribed.countDown(),
+        request = Some(100),
+        next = (s, msg) => {
+          res1 ::= msg.asInstanceOf[TextMessage].getText
+          consumingLatch.countDown()
+        }
+      ))
+    pub.subscribe(
+      TestSubscriber(
+        subscribe = subscription => subscribed.countDown(),
+        request = Some(100),
+        next = (s, msg) => {
+          res2 ::= msg.asInstanceOf[TextMessage].getText
+          consumingLatch.countDown()
+        }
     ))
-    pub.subscribe(TestSubscriber(
-      request = Some(100),
-      next = (s, msg) => res2 ::= msg.asInstanceOf[TextMessage].getText
-    ))
+    subscribed.await(500, TimeUnit.MILLISECONDS) // it needs to asynchronously subscribe for a topic
 
     val msgs = (1 to 100).map(_.toString)
     sendMessages(msgs, string2textMessage, topic)
-
-    Thread.sleep(1000) // TODO: Implement another waiting strategy!
+    consumingLatch.await(3, TimeUnit.SECONDS)
 
     res1 should equal(msgs.reverse)
     res2 should equal(msgs.reverse)
