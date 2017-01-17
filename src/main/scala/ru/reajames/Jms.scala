@@ -118,8 +118,10 @@ object Jms {
     * @param message specifies message to be sent
     * @return sent message or failure
     */
-  def send(producer: MessageProducer, message: Message): Try[Message] =
-    Try(producer.send(message)).map(_ => message)
+  def send(producer: MessageProducer, message: Message): Try[Message] = Try {
+    producer.send(message)
+    message
+  }
 
   /**
     * Sends a message with the specified producer to the specified destination.
@@ -128,6 +130,8 @@ object Jms {
     * @param destination specifies destination
     * @return sent message or failure
     */
-  def send(producer: MessageProducer, message: Message, destination: Destination): Try[Message] =
-    Try(producer.send(destination, message)).map(_ => message)
+  def send(producer: MessageProducer, message: Message, destination: Destination): Try[Message] = Try {
+    producer.send(destination, message)
+    message
+  }
 }

@@ -14,10 +14,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 21.12.16 1:41.
   */
-class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities {
-  private implicit val connectionFactory =
-    new ActiveMQConnectionFactory("vm://test-broker?broker.persistent=false&broker.useJmx=false")
-
+class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities with ActimeMQConnectionFactoryAware {
   "JmsReceiver" should "raise an exception in case whether subscriber is not specified" in {
     val queue = Queue("queue-5")
     val pub = new JmsReceiver(connectionFactory, queue)

@@ -49,26 +49,19 @@ package object reajames {
   }
 
   /**
-    * Creates a message using specified data element and session.
-    * @tparam T specifies data type
-    */
-  type MessageFactory[T] = Session => T => Message
-
-  /**
     * Creates a text message using session and a string.
     */
-  val string2textMessage: MessageFactory[String] = session => text => session.createTextMessage(text)
+  val string2textMessage: (Session, String) => Message = (session, text) => session.createTextMessage(text)
 
   /**
-    * Parses a message to interpret it as a data type instance.
+    * Creates a message using specified data element as well as message destination.
     * @tparam T specifies data type
     */
-  type MessageParser[T] = PartialFunction[Message, T]
+  type DestinationAwareMessageFactory[T] = (Session, T) => (Message, Destination)
 
-  /**
-    * Parses a text message to a string.
-    */
-  val textMessage2string: MessageParser[String] = {
-    case msg: TextMessage => msg.getText
-  }
+  def permanentDestination[T](destinationFactory: DestinationFactory)(messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[T] =
+    (session, elem) => (messageFactory(session, elem), destinationFactory(session))
+
+  def replyTo[T](messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[(T, Destination)] =
+    (session, elem) => (messageFactory(session, elem._1), elem._2)
 }

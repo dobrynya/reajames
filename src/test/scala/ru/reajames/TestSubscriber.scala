@@ -42,3 +42,30 @@ case class TestSubscriber(subscribe: Subscription => Unit = s => (),
     */
   def onNext(msg: Message): Unit = next(subscription, msg)
 }
+
+/**
+  * Just sends specified list to a subscriber on request.
+  * @param list messages to be sent
+  * @tparam T message type
+  */
+case class QueuePublisher[T](list: List[T]) extends Publisher[T] {
+  def subscribe(s: Subscriber[_ >: T]): Unit = {
+    s.onSubscribe(new Subscription {
+      var queue = list
+      var cancelled = Option.empty[Boolean]
+
+      def cancel() = cancelled match {
+        case None => cancelled = Some(true)
+        case _ =>
+      }
+
+      def request(n: Long) =
+        cancelled.getOrElse {
+          queue.headOption.map { e =>
+            s.onNext(e)
+            queue = queue.tail
+          }.getOrElse(s.onComplete())
+        }
+    })
+  }
+}

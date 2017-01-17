@@ -87,7 +87,7 @@ trait JmsSpec extends Matchers { this: FlatSpec =>
       d <- destination(s, Queue("queue"))
       p <- producer(s, d)
     } {
-      messages.map(string2textMessage(s)).foreach(send(p, _))
+      messages.map(string2textMessage(s, _)).foreach(send(p, _))
       close(c)
     }
 

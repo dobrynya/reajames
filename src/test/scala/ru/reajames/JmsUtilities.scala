@@ -4,6 +4,7 @@ import Jms._
 import javax.jms._
 import org.reactivestreams._
 import scala.concurrent.{Future, Promise}
+import scala.language.implicitConversions
 
 /**
   * Provides helpful utilities for testing purposes.
@@ -11,6 +12,12 @@ import scala.concurrent.{Future, Promise}
   *         Created at 22.12.16 2:03.
   */
 trait JmsUtilities {
+  implicit def withModifier[T <: AnyRef](beingModified: T) = new {
+    def tap[U](modifier: T => U): T = {
+      modifier(beingModified)
+      beingModified
+    }
+  }
 
   /**
     * Sends messages to the specified destination and closes connection.
@@ -20,7 +27,7 @@ trait JmsUtilities {
     * @param connectionFactory connection factory
     * @tparam T data element type
     */
-  def sendMessages[T](messages: Traversable[T], messageFactory: MessageFactory[T],
+  def sendMessages[T](messages: Traversable[T], messageFactory: (Session, T) => Message,
                       destinationFactory: DestinationFactory)
                      (implicit connectionFactory: ConnectionFactory): Unit = {
     for {
@@ -29,7 +36,7 @@ trait JmsUtilities {
       d <- destination(s, destinationFactory)
       p <- producer(s, d)
     } {
-      messages.foreach(m => send(p, messageFactory(s)(m)))
+      messages.foreach(m => send(p, messageFactory(s, m)))
       close(c)
     }
   }

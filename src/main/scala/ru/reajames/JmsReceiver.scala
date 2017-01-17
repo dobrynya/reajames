@@ -21,6 +21,7 @@ class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: Dest
     if (subscriber == null)
       throw new NullPointerException("Subscriber should be specified!")
 
+    // TODO: Implement asynchronous initialization!
     val subscription = for {
       c <- connection(connectionFactory, credentials, clientId)
       _ <- start(c)
@@ -40,14 +41,18 @@ class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: Dest
           close(c).recover {
             case th => logger.warn("An error occurred during closing connection!", th)
           }
-          logger.debug("Cancelled subscription {}", this)
+          logger.debug("Cancelled subscription to {}", destinationFactory)
         }
 
       @tailrec
       def receiveMessage(): Unit = {
           receive(consumer).map {
-            case Some(msg) => subscriber.onNext(msg)
-            case None => subscriber.onComplete()
+            case Some(msg) =>
+              logger.debug("Received message {}", msg)
+              subscriber.onNext(msg)
+            case None =>
+              logger.debug("Consumer possibly has been closed, completing subscriber")
+              subscriber.onComplete()
           } recover {
             case th =>
               cancel()
@@ -57,22 +62,22 @@ class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: Dest
         }
 
       def request(n: Long): Unit = {
-        logger.debug("Requested {} from {}", n, this)
+        logger.debug("Requested {} from {}", n, destinationFactory)
         if (n <= 0)
           throw new IllegalArgumentException(s"Wrong requested items amount $n!")
         else if (requested.getAndAdd(n) == 0)
           executionContext.execute(() => receiveMessage())
       }
 
-      override def toString: String = "JmsReceiver(%s,%s)".format(connectionFactory, destinationFactory)
+      override def toString: String = "JmsReceiver(%s,%s)".format(c, destinationFactory)
     }
 
     subscription match {
       case Success(s) =>
-        logger.debug("{} has been subscribed to {} at {}", subscriber, destinationFactory, connectionFactory)
+        logger.debug("Subscribed to {}", destinationFactory)
         subscriber.onSubscribe(s)
       case Failure(th) =>
-        logger.warn("{} could not subscribe to {} at {}", subscriber, destinationFactory, connectionFactory)
+        logger.warn(s"Could not subscribe to $destinationFactory", th)
         subscriber.onError(th)
     }
   }
