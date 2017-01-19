@@ -69,7 +69,7 @@ class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: Dest
       private def receiveMessage(): Unit = {
         receive(consumer).map {
           case Some(msg) =>
-            logger.debug("Received message {}", msg)
+            logger.debug("Received {}", msg)
             subscriber.onNext(msg)
           case None =>
             logger.debug("Consumer possibly has been closed, completing subscriber")

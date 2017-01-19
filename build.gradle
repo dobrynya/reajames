@@ -21,6 +21,7 @@ dependencies {
     testCompile "org.scalatest:scalatest_2.12:3+"
     testCompile "org.apache.activemq:activemq-broker:+"
     testCompile "com.typesafe.akka:akka-stream_2.12:2+"
+    testCompile "io.swave:swave-core_2.12:+"
     testCompile("net.timewalker.ffmq:ffmq4-server:4.0.0") {
         exclude module: "jms"
         exclude module: "log4j"

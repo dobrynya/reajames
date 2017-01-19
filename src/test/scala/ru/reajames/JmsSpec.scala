@@ -100,7 +100,6 @@ trait JmsSpec extends Matchers { this: FlatSpec =>
     } {
       messages.map(_ -> receive(consumer)).collect {
         case (i, Success(Some(message: TextMessage))) =>
-          println("Received %s - %s".format(i, message))
           message.getText
       } should equal(messages)
       close(c)
