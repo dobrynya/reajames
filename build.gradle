@@ -83,8 +83,8 @@ publishing {
 }
 
 bintray {
-    user = bintrayUser
-    key = bintrayApiKey
+    user = project.properties.bintrayUser
+    key = project.properties.bintrayApiKey
 
     pkg {
         repo = "maven"
