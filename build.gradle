@@ -1,12 +1,16 @@
 plugins {
     id "com.github.maiflai.scalatest" version "0.14"
+    id "com.jfrog.bintray" version "1.7.3"
 }
 
 apply plugin: "scala"
+apply plugin: "maven"
+apply plugin: "maven-publish"
 
 repositories {
     mavenCentral()
 }
+project.version = "0.1"
 
 dependencies {
     compile "org.scala-lang:scala-library:2.12+"
@@ -24,4 +28,75 @@ dependencies {
     testRuntime "ch.qos.logback:logback-classic:+"
     testRuntime "org.slf4j:log4j-over-slf4j:+"
     testRuntime "org.pegdown:pegdown:1.6.0"
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = "sources"
+    from sourceSets.main.allSource
+}
+
+task scaladocJar(type: Jar, dependsOn: scaladoc) {
+    classifier = 'scaladoc'
+    from scaladoc.destinationDir
+}
+
+artifacts {
+    archives sourcesJar
+    archives scaladocJar
+}
+
+def pomConfig = {
+    licenses {
+        license {
+            name "The Apache Software License, Version 2.0"
+            url "http://www.apache.org/licenses/LICENSE-2.0.txt"
+            distribution "repo"
+        }
+    }
+    developers {
+        developer {
+            id "dobrynya"
+            name "Dmitry Dobrynin"
+            email "dobrynya@inbox.ru"
+        }
+    }
+}
+
+publishing {
+    publications {
+        MyPublication(MavenPublication) {
+            from components.java
+            artifact sourcesJar
+            artifact scaladocJar
+            groupId "ru.reajames"
+            artifactId "reajames"
+            version project.version
+            pom.withXml {
+                def root = asNode()
+                root.appendNode("description", "ReaJaMeS is JMS in terms of Reactive Streams")
+                root.appendNode("name", "Reajames")
+                root.appendNode("url", "https://github.com/dobrynya/reajames")
+                root.children().last() + pomConfig
+            }
+        }
+    }
+}
+
+bintray {
+    user = bintrayUser
+    key = bintrayApiKey
+
+    pkg {
+        repo = "maven"
+        name = "reajames"
+        vcsUrl = "https://github.com/dobrynya/reajames.git"
+        licenses = ["Apache-2.0"]
+
+        version {
+            name = project.version
+            released  = new Date()
+        }
+    }
+
+    publications = ["MyPublication"]
 }
