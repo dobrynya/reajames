@@ -1,17 +1,13 @@
 package ru.reajames
 
 import Jms._
-
 import scala.util._
-import javax.jms.{Message, TextMessage}
-
+import javax.jms.TextMessage
 import scala.concurrent.Promise
 import org.reactivestreams.Subscription
 import org.scalatest._
 import time._
 import concurrent._
-import java.util.concurrent.atomic.AtomicInteger
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**

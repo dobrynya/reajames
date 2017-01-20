@@ -1,6 +1,7 @@
 package ru
 
-import javax.jms._
+import java.util.concurrent.atomic.AtomicReference
+import javax.jms.{Message, Session, Destination => JmsDestination}
 
 /**
   * Contains helpful types and functions.
@@ -12,14 +13,14 @@ package object reajames {
   /**
     * Creates a destination using specified session.
     */
-  type DestinationFactory = Session => Destination
+  type DestinationFactory = Session => JmsDestination
 
   /**
     * Creates a queue.
     * @param name specifies name of a queue
     */
   case class Queue(name: String) extends DestinationFactory {
-    def apply(session: Session): Destination = session.createQueue(name)
+    def apply(session: Session): JmsDestination = session.createQueue(name)
     override def toString: String = "Queue(%s)" format name
   }
 
@@ -28,24 +29,34 @@ package object reajames {
     * @param name specifies name of a topic
     */
   case class Topic(name: String) extends DestinationFactory {
-    def apply(session: Session): Destination = session.createTopic(name)
+    def apply(session: Session): JmsDestination = session.createTopic(name)
     override def toString: String = "Topic(%s)" format name
   }
 
   /**
-    * Creates a temporary unnamed queue.
+    * Contains somehow created destination.
+    * @param destination destination to be returned
     */
-  case object TemporaryQueue extends DestinationFactory {
-    def apply(session: Session): Destination = session.createTemporaryQueue()
-    override def toString: String = "TemporaryQueue"
+  case class Destination(destination: JmsDestination) extends DestinationFactory {
+    def apply(session: Session): JmsDestination = destination
+    override def toString(): String = destination.toString
   }
 
   /**
-    * Creates a temporary unnamed topic.
+    * Creates a destination and caches it for future use. This component should not be used concurrently.
     */
-  case object TemporaryTopic extends DestinationFactory {
-    def apply(session: Session): Destination = session.createTemporaryTopic()
-    override def toString: String = "TemporaryTopic"
+  trait CachingDestinationFactory extends DestinationFactory {
+    private var cached = new AtomicReference[JmsDestination]()
+
+    private[reajames] def create(session: Session): JmsDestination
+
+    def apply(session: Session): JmsDestination = {
+      if (cached.get() == null) cached.compareAndSet(null, create(session))
+      cached.get()
+    }
+
+    override def toString(): String =
+      if (cached != null) cached.toString else "CachingDestinationFactory"
   }
 
   /**
@@ -57,11 +68,11 @@ package object reajames {
     * Creates a message using specified data element as well as message destination.
     * @tparam T specifies data type
     */
-  type DestinationAwareMessageFactory[T] = (Session, T) => (Message, Destination)
+  type DestinationAwareMessageFactory[T] = (Session, T) => (Message, JmsDestination)
 
   def permanentDestination[T](destinationFactory: DestinationFactory)(messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[T] =
     (session, elem) => (messageFactory(session, elem), destinationFactory(session))
 
-  def replyTo[T](messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[(T, Destination)] =
+  def replyTo[T](messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[(T, JmsDestination)] =
     (session, elem) => (messageFactory(session, elem._1), elem._2)
 }

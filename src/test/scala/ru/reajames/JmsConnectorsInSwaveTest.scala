@@ -1,9 +1,10 @@
 package ru.reajames
 
 import swave.core._
-import scala.concurrent.Future
+import java.util.concurrent.Executors
+import scala.concurrent.{ExecutionContext, Future}
 import org.scalatest._, concurrent._, time._
-import javax.jms.{Destination, Message, TextMessage}
+import javax.jms.{Message, TextMessage}
 
 /**
   * Tests using JMS connectors in the Swave infrastructure.
@@ -15,7 +16,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
   behavior of "JMS connectors"
 
   implicit val env = StreamEnv()
-  import env.defaultDispatcher
+  implicit val ctx = ExecutionContext.fromExecutor(Executors.newScheduledThreadPool(12))
 
   "JmsReceiver" should "receive messages and pass it to stream for processing" in {
     val queue = Queue("queue-10")
@@ -78,26 +79,58 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
         .map(Spout.fromPublisher).map(_.collect(extractText).take(1).drainToHead())
     )
 
+    val serverIn = Queue("queue-11-in")
+
     // Main pipeline
-    Spout.fromPublisher(new JmsReceiver(connectionFactory, Queue("in"))).take(3)
-      .collect {
-        case msg: TextMessage => (msg.getText, msg.getJMSReplyTo) // store JMSReplyTo header with message body
-      }
-      .drainTo(Drain.fromSubscriber(new JmsSender[(String, Destination)](connectionFactory, replyTo(string2textMessage))))
+    Spout.fromPublisher(new JmsReceiver(connectionFactory, serverIn)).take(3).collect {
+      case msg: TextMessage => (msg.getText, msg.getJMSReplyTo)
+    }.drainTo(Drain.fromSubscriber(new JmsSender(connectionFactory, replyTo(string2textMessage))))
 
     // just enriches a newly created text message with JMSReplyTo
     val sendReplyToHeader: DestinationAwareMessageFactory[String] =
       (session, elem) =>
-        (session.createTextMessage(elem).tap(_.setJMSReplyTo(Queue(elem)(session))), Queue("in")(session))
+        (session.createTextMessage(elem).tap(_.setJMSReplyTo(Queue(elem)(session))), serverIn(session))
 
     val sender = new JmsSender[String](connectionFactory, sendReplyToHeader)
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(sender))
 
-    whenReady(messagesReceivedByClients, timeout(Span(15, Seconds))) {
+    whenReady(messagesReceivedByClients, timeout(Span(10, Seconds))) {
       _ == messagesToSend
     }
   }
 
+  "Jms components" should "create a channel through a temporary queue" in {
+    val messagesToSend = List("message 1", "message 2", "message 3")
+
+    val serverIn = Queue("swave-q-1")
+    val clientIn = Queue("swawe-q-2")
+
+    // listen to a temporary queue
+    val result = Spout.fromPublisher(new JmsReceiver(connectionFactory, clientIn))
+      .collect(extractText)
+      .take(messagesToSend.size)
+      .onElement(s => println("Client received %s" format s))
+      .drainToList(messagesToSend.size)
+
+    def enrichReplyTo[T](replyTo: DestinationFactory)
+                        (messageFactory: DestinationAwareMessageFactory[T]): DestinationAwareMessageFactory[T] =
+      (session, element) =>
+        messageFactory(session, element) match {
+          case (msg, destination) => (msg.tap(_.setJMSReplyTo(replyTo(session))), destination)
+        }
+
+    Spout.fromPublisher(new JmsReceiver(connectionFactory, serverIn)).collect {
+      case msg: TextMessage => (msg.getText, msg.getJMSReplyTo)
+    }.take(messagesToSend.size).drainTo(Drain.fromSubscriber(new JmsSender(connectionFactory, replyTo(string2textMessage))))
+
+    val clientRequests = new JmsSender[String](connectionFactory,
+      enrichReplyTo(clientIn)(permanentDestination(serverIn)(string2textMessage)))
+    Spout(messagesToSend).drainTo(Drain.fromSubscriber(clientRequests))
+
+    whenReady(result, timeout(Span(10, Seconds))) {
+      _ == messagesToSend
+    }
+  }
 
   def extractText: PartialFunction[Message, String] = {
     case msg: TextMessage => msg.getText

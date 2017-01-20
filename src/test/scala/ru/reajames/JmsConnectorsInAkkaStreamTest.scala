@@ -17,7 +17,7 @@ class JmsConnectorsInAkkaStreamTest extends FlatSpec with Matchers with BeforeAn
   behavior of "JMS connectors"
 
   implicit val system = ActorSystem("test")
-  implicit val ec = system.dispatcher
+  implicit val ec = system.dispatchers.lookup("akka.stream.default-blocking-io-dispatcher")
   implicit val mat = ActorMaterializer()
 
   "JmsReceiver" should "receive messages and pass it to akka stream for processing" in {
@@ -85,8 +85,7 @@ class JmsConnectorsInAkkaStreamTest extends FlatSpec with Matchers with BeforeAn
     Source.fromPublisher(new JmsReceiver(connectionFactory, Queue("in"))).take(3)
       .collect {
         case msg: TextMessage => (msg.getText, msg.getJMSReplyTo) // store JMSReplyTo header with message body
-      }
-      .runWith(Sink.fromSubscriber(new JmsSender[(String, Destination)](connectionFactory, replyTo(string2textMessage))))
+      }.runWith(Sink.fromSubscriber(new JmsSender(connectionFactory, replyTo(string2textMessage))))
 
     // just enriches a newly created text message with JMSReplyTo
     val sendReplyToHeader: DestinationAwareMessageFactory[String] =
@@ -97,6 +96,38 @@ class JmsConnectorsInAkkaStreamTest extends FlatSpec with Matchers with BeforeAn
     Source(messagesToSend).runWith(Sink.fromSubscriber(sender))
 
     whenReady(messagesReceivedByClients, timeout(Span(15, Seconds))) {
+      _ == messagesToSend
+    }
+  }
+
+  "Jms components" should "create a channel through a temporary queue" in {
+    val messagesToSend = List("message 1", "message 2", "message 3")
+
+    val serverIn = Queue("akka-q-1")
+    val clientIn = Queue("akka-q-2")
+
+    // listen to a temporary queue
+    val result = Source.fromPublisher(new JmsReceiver(connectionFactory, clientIn))
+      .collect(extractText)
+      .take(messagesToSend.size)
+      .runWith(Sink.seq).map(_.toList)
+
+    def enrichReplyTo[T](replyTo: DestinationFactory)
+                        (messageFactory: DestinationAwareMessageFactory[T]): DestinationAwareMessageFactory[T] =
+      (session, element) =>
+        messageFactory(session, element) match {
+          case (msg, destination) => (msg.tap(_.setJMSReplyTo(replyTo(session))), destination)
+        }
+
+    Source.fromPublisher(new JmsReceiver(connectionFactory, serverIn)).collect {
+      case msg: TextMessage => (msg.getText, msg.getJMSReplyTo)
+    }.take(messagesToSend.size).runWith(Sink.fromSubscriber(new JmsSender(connectionFactory, replyTo(string2textMessage))))
+
+    val clientRequests = new JmsSender[String](connectionFactory,
+      enrichReplyTo(clientIn)(permanentDestination(serverIn)(string2textMessage)))
+    Source(messagesToSend).runWith(Sink.fromSubscriber(clientRequests))
+
+    whenReady(result, timeout(Span(15, Seconds))) {
       _ == messagesToSend
     }
   }

@@ -67,7 +67,7 @@ class JmsSender[T](connectionFactory: ConnectionFactory,
           logger.debug("Sent {}", msg)
           subscription.request(1)
         case Failure(th) =>
-          logger.warn(s"Could not send a message to $connectionFactory, closing connection!", th)
+          logger.warn(s"Could not send a message to $destination, closing connection!", th)
           subscription.cancel()
           state = Unsubscribed.asInstanceOf[Subscriber[T]]
           close(connection).recover {

@@ -1,10 +1,10 @@
 package ru.reajames
 
 import Jms._
-import javax.jms._
 import scala.util._
 import org.scalatest._
 import org.apache.activemq._
+import javax.jms.{Destination => JmsDestination, _}
 
 /**
   * Specification on Jms.
@@ -41,10 +41,10 @@ trait JmsSpec extends Matchers { this: FlatSpec =>
     for {
       c <- connection(connectionFactory)
       s <- session(c)
-      destinationFactory <- List(Queue("queue"), Topic("topic"), TemporaryQueue, TemporaryTopic)
+      destinationFactory <- List(Queue("queue"), Topic("topic"))
       destination <- destination(s, destinationFactory)
     }
-      destination shouldBe a[Destination]
+      destination shouldBe a[JmsDestination]
   }
 
   it should "create a message consumer" in {

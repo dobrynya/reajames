@@ -1,7 +1,7 @@
 package ru.reajames
 
-import javax.jms._
 import scala.util.Try
+import javax.jms.{Destination => JmsDestination, ConnectionFactory, Connection, Session, Message, MessageConsumer, MessageProducer}
 
 /**
   * Provides helpful methods to work with JMS.
@@ -74,7 +74,7 @@ object Jms {
     * @param destination specifies destination factory to create destination
     * @return created destination or failure
     */
-  def destination(session: Session, destination: DestinationFactory): Try[Destination] =
+  def destination(session: Session, destination: DestinationFactory): Try[JmsDestination] =
     Try(destination(session))
 
   /**
@@ -83,7 +83,7 @@ object Jms {
     * @param destination specifies destination of delivered messages
     * @return created consumer or failure
     */
-  def consumer(session: Session, destination: Destination): Try[MessageConsumer] =
+  def consumer(session: Session, destination: JmsDestination): Try[MessageConsumer] =
     Try(session.createConsumer(destination))
 
   /**
@@ -92,7 +92,7 @@ object Jms {
     * @param destination specifies destination for messages
     * @return created producer or failure
     */
-  def producer(session: Session, destination: Destination): Try[MessageProducer] =
+  def producer(session: Session, destination: JmsDestination): Try[MessageProducer] =
     Try(session.createProducer(destination))
 
   /**
@@ -130,7 +130,7 @@ object Jms {
     * @param destination specifies destination
     * @return sent message or failure
     */
-  def send(producer: MessageProducer, message: Message, destination: Destination): Try[Message] = Try {
+  def send(producer: MessageProducer, message: Message, destination: JmsDestination): Try[Message] = Try {
     producer.send(destination, message)
     message
   }
