@@ -16,13 +16,6 @@ import scala.language.implicitConversions
   *         Created at 22.12.16 2:03.
   */
 trait JmsUtilities {
-  implicit def withModifier[T <: AnyRef](beingModified: T) = new {
-    def tap[U](modifier: T => U): T = {
-      modifier(beingModified)
-      beingModified
-    }
-  }
-
   /**
     * Sends messages to the specified destination and closes connection.
     * @param messages messages to be sent

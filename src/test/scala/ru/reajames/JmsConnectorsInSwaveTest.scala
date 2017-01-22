@@ -2,9 +2,9 @@ package ru.reajames
 
 import swave.core._
 import java.util.concurrent.Executors
-import scala.concurrent.{ExecutionContext, Future}
-import org.scalatest._, concurrent._, time._
 import javax.jms.{Message, TextMessage}
+import org.scalatest._, concurrent._, time._
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Tests using JMS connectors in the Swave infrastructure.
@@ -18,11 +18,13 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
   implicit val env = StreamEnv()
   implicit val ctx = ExecutionContext.fromExecutor(Executors.newScheduledThreadPool(12))
 
+  val connectionHolder = new ConnectionHolder(connectionFactory)
+
   "JmsReceiver" should "receive messages and pass it to stream for processing" in {
     val queue = Queue("queue-10")
     val messagesToBeSent = (1 to 50).map(_.toString).toList
 
-    val receiver = new JmsReceiver(connectionFactory, queue)
+    val receiver = new JmsReceiver(connectionHolder, queue)
     val received = Spout.fromPublisher(receiver).collect(extractText).take(25).drainToList(50)
 
     sendMessages(messagesToBeSent, string2textMessage, queue)
@@ -37,11 +39,11 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
 
     val messagesToSend = (1 to 100).map(_.toString).toList
 
-    val received = Spout.fromPublisher(new JmsReceiver(connectionFactory, queue)).collect {
+    val received = Spout.fromPublisher(new JmsReceiver(connectionHolder, queue)).collect {
       case msg: TextMessage => msg.getText
     }.take(messagesToSend.size).drainToList(100)
 
-    val sender = new JmsSender[String](connectionFactory, permanentDestination(queue)(string2textMessage))
+    val sender = new JmsSender[String](connectionHolder, permanentDestination(queue)(string2textMessage))
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(sender))
 
     whenReady(received, timeout(Span(10, Seconds))) {
@@ -54,7 +56,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
 
     val received = Future.sequence(
       messagesToSend
-        .map(q => new JmsReceiver(connectionFactory, Queue(q)))
+        .map(q => new JmsReceiver(connectionHolder, Queue(q)))
         .map(Spout.fromPublisher).map(_.collect(extractText).take(1).drainToHead())
     )
 
@@ -62,7 +64,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
     val sendMessagesToDifferentQueues: DestinationAwareMessageFactory[String] =
       (session, elem) => (session.createTextMessage(elem), Queue(elem)(session))
 
-    val sender = new JmsSender[String](connectionFactory, sendMessagesToDifferentQueues)
+    val sender = new JmsSender[String](connectionHolder, sendMessagesToDifferentQueues)
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(sender))
 
     whenReady(received, timeout(Span(10, Seconds))) {
@@ -75,23 +77,23 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
 
     val messagesReceivedByClients = Future.sequence(
       messagesToSend
-        .map(q => new JmsReceiver(connectionFactory, Queue(q)))
+        .map(q => new JmsReceiver(connectionHolder, Queue(q)))
         .map(Spout.fromPublisher).map(_.collect(extractText).take(1).drainToHead())
     )
 
     val serverIn = Queue("queue-11-in")
 
     // Main pipeline
-    Spout.fromPublisher(new JmsReceiver(connectionFactory, serverIn)).take(3).collect {
+    Spout.fromPublisher(new JmsReceiver(connectionHolder, serverIn)).take(3).collect {
       case msg: TextMessage => (msg.getText, msg.getJMSReplyTo)
-    }.drainTo(Drain.fromSubscriber(new JmsSender(connectionFactory, replyTo(string2textMessage))))
+    }.drainTo(Drain.fromSubscriber(new JmsSender(connectionHolder, replyTo(string2textMessage))))
 
     // just enriches a newly created text message with JMSReplyTo
     val sendReplyToHeader: DestinationAwareMessageFactory[String] =
       (session, elem) =>
-        (session.createTextMessage(elem).tap(_.setJMSReplyTo(Queue(elem)(session))), serverIn(session))
+        (mutate(session.createTextMessage(elem))(_.setJMSReplyTo(Queue(elem)(session))), serverIn(session))
 
-    val sender = new JmsSender[String](connectionFactory, sendReplyToHeader)
+    val sender = new JmsSender[String](connectionHolder, sendReplyToHeader)
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(sender))
 
     whenReady(messagesReceivedByClients, timeout(Span(10, Seconds))) {
@@ -105,7 +107,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
     val serverIn = Queue("swave-q-1")
     val clientIn = Queue("swawe-q-2")
 
-    val result = Spout.fromPublisher(new JmsReceiver(connectionFactory, clientIn))
+    val result = Spout.fromPublisher(new JmsReceiver(connectionHolder, clientIn))
       .collect(extractText)
       .take(messagesToSend.size)
       .onElement(s => println("Client received %s" format s))
@@ -115,14 +117,14 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
                         (messageFactory: DestinationAwareMessageFactory[T]): DestinationAwareMessageFactory[T] =
       (session, element) =>
         messageFactory(session, element) match {
-          case (msg, destination) => (msg.tap(_.setJMSReplyTo(replyTo(session))), destination)
+          case (msg, destination) => (mutate(msg)(_.setJMSReplyTo(replyTo(session))), destination)
         }
 
-    Spout.fromPublisher(new JmsReceiver(connectionFactory, serverIn)).collect {
+    Spout.fromPublisher(new JmsReceiver(connectionHolder, serverIn)).collect {
       case msg: TextMessage => (msg.getText, msg.getJMSReplyTo)
-    }.take(messagesToSend.size).drainTo(Drain.fromSubscriber(new JmsSender(connectionFactory, replyTo(string2textMessage))))
+    }.take(messagesToSend.size).drainTo(Drain.fromSubscriber(new JmsSender(connectionHolder, replyTo(string2textMessage))))
 
-    val clientRequests = new JmsSender[String](connectionFactory,
+    val clientRequests = new JmsSender[String](connectionHolder,
       enrichReplyTo(clientIn)(permanentDestination(serverIn)(string2textMessage)))
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(clientRequests))
 

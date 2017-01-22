@@ -1,17 +1,11 @@
 package ru.reajames
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import org.scalatest._
 import javax.jms.TextMessage
-
 import scala.concurrent.Await
-import scala.language.reflectiveCalls
 import scala.concurrent.duration.Duration
 import java.util.concurrent.atomic.AtomicBoolean
-
-import org.apache.activemq.ActiveMQConnectionFactory
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -20,15 +14,17 @@ import scala.concurrent.ExecutionContext.Implicits.global
   *         Created at 21.12.16 1:41.
   */
 class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities with ActimeMQConnectionFactoryAware {
+  val connectionHolder = new ConnectionHolder(connectionFactory)
+
   "JmsReceiver" should "raise an exception in case whether subscriber is not specified" in {
     val queue = Queue("queue-5")
-    val pub = new JmsReceiver(connectionFactory, queue)
+    val pub = new JmsReceiver(connectionHolder, queue)
     intercept[NullPointerException](pub.subscribe(null))
   }
 
   it should "publish messages arrived to a JMS queue" in {
     val queue = Queue("queue-6")
-    val pub = stopper(new JmsReceiver(connectionFactory, queue), 500)
+    val pub = stopper(new JmsReceiver(connectionHolder, queue), 500)
 
     var received = List.empty[String]
     pub.subscribe(TestSubscriber(
@@ -48,7 +44,7 @@ class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities with Acti
 
   it should "not call subscriber concurrently" in {
     val queue = Queue("queue-7")
-    val pub = new JmsReceiver(connectionFactory, queue)
+    val pub = new JmsReceiver(connectionHolder, queue)
 
     var checked = true
     val called = new AtomicBoolean(false)
@@ -76,7 +72,7 @@ class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities with Acti
     val received = new CountDownLatch(100)
 
     val topic = Topic("topic-8")
-    val pub = new JmsReceiver(connectionFactory, topic)
+    val pub = new JmsReceiver(connectionHolder, topic)
 
     @volatile var counter = 0
     pub.subscribe(TestSubscriber(
@@ -102,7 +98,7 @@ class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities with Acti
     val consumingLatch = new CountDownLatch(200)
     val subscribed = new CountDownLatch(2)
 
-    val pub = new JmsReceiver(connectionFactory, topic)
+    val pub = new JmsReceiver(connectionHolder, topic)
     pub.subscribe(
       TestSubscriber(
         subscribe = subsciption => subscribed.countDown(),

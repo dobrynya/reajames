@@ -5,9 +5,7 @@ import scala.util._
 import javax.jms.TextMessage
 import scala.concurrent.Promise
 import org.reactivestreams.Subscription
-import org.scalatest._
-import time._
-import concurrent._
+import org.scalatest._, concurrent._, time._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -18,15 +16,17 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLimits
   with ActimeMQConnectionFactoryAware with JmsUtilities {
 
+  val connectionHolder = new ConnectionHolder(connectionFactory)
+
   "Unsubscribed" should "do nothing on all events except onSubscribe" in {
-    val sender = new JmsSender[String](connectionFactory, permanentDestination(Queue("queue-12"))(string2textMessage))
+    val sender = new JmsSender[String](connectionHolder, permanentDestination(Queue("queue-12"))(string2textMessage))
     sender.onComplete()
     sender.onError(new Exception("Generated exception!"))
     sender.onNext("Test message")
   }
 
   "JmsSender" should "be able to connect the broker only once" in {
-    val sender = new JmsSender[String](connectionFactory, permanentDestination(Queue("queue-13"))(string2textMessage))
+    val sender = new JmsSender[String](connectionHolder, permanentDestination(Queue("queue-13"))(string2textMessage))
 
     val requestedBySubscription = Promise[Boolean]()
     sender.onSubscribe(new Subscription {
@@ -46,18 +46,17 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
   "JmsSender" should "be able to send messages to a permanently specified destination" in {
     val queue = Queue("queue-14")
 
-    val sender = new JmsSender[String](connectionFactory, permanentDestination(queue)(string2textMessage))
+    val sender = new JmsSender[String](connectionHolder, permanentDestination(queue)(string2textMessage))
     QueuePublisher(List("message to send")).subscribe(sender)
 
     failAfter(Span(500, Millis)) {
       val received = for {
-        c <- connection(connectionFactory)
+        c <- connectionHolder.connection
         _ <- start(c)
         s <- session(c)
         d <- destination(s, queue)
         cons <- consumer(s, d)
         received <- receive(cons)
-        _ <- close(c)
       } yield received
 
       received should matchPattern {
@@ -72,9 +71,9 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
 
     // enriches a newly created message with JMSCorrelationID header
     def corrId: DestinationAwareMessageFactory[String] = (session, elem) =>
-      (session.createTextMessage(elem).tap(_.setJMSCorrelationID(elem)), out(session))
+      (mutate(session.createTextMessage(elem))(_.setJMSCorrelationID(elem)), out(session))
 
-    val sender = new JmsSender[String](connectionFactory, corrId)
+    val sender = new JmsSender[String](connectionHolder, corrId)
 
     val messagesToSend = List("m1", "m2", "m3")
 
@@ -82,7 +81,7 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
 
     failAfter(Span(1, Second)) {
       val received = for {
-        c <- connection(connectionFactory)
+        c <- connectionHolder.connection
         _ <- start(c)
         s <- session(c)
         d <- destination(s, out)

@@ -57,6 +57,13 @@ object Jms {
   def close(messageConsumer: MessageConsumer): Try[Unit] = Try(messageConsumer.close())
 
   /**
+    * Closes a message producer to stop sending messages.
+    * @param producer producer to be closed
+    * @return success or failure
+    */
+  def close(producer: MessageProducer): Try[Unit] = Try(producer.close())
+
+  /**
     * Creates a session by the specified connection.
     * @param connection specifies connection to create a session
     * @param transacted specifies whether created session is transaction aware or not

@@ -2,10 +2,10 @@ package ru.reajames
 
 import akka.stream.scaladsl._
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
-import javax.jms.{Destination, Message, TextMessage}
-import org.scalatest._, time._, concurrent._
 import scala.concurrent.Future
+import akka.stream.ActorMaterializer
+import javax.jms.{Message, TextMessage}
+import org.scalatest._, time._, concurrent._
 
 /**
   * Tests using JMS connectors in the Akka Stream infrastructure.
@@ -20,11 +20,13 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
   implicit val ec = system.dispatchers.lookup("akka.stream.default-blocking-io-dispatcher")
   implicit val mat = ActorMaterializer()
 
+  val connectionHolder = new ConnectionHolder(connectionFactory)
+
   "JmsReceiver" should "receive messages and pass it to akka stream for processing" in {
     val queue = Queue("queue-10")
     val messagesToBeSent = (1 to 50).map(_.toString).toList
 
-    val receiver = new JmsReceiver(connectionFactory, queue)
+    val receiver = new JmsReceiver(connectionHolder, queue)
     val received = Source.fromPublisher(receiver).collect(extractText).take(25).runWith(Sink.seq)
 
     sendMessages(messagesToBeSent, string2textMessage, queue)
@@ -39,11 +41,11 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
 
     val messagesToSend = (1 to 100).map(_.toString).toList
 
-    val received = Source.fromPublisher(new JmsReceiver(connectionFactory, queue)).collect {
+    val received = Source.fromPublisher(new JmsReceiver(connectionHolder, queue)).collect {
       case msg: TextMessage => msg.getText
     }.take(messagesToSend.size).runWith(Sink.seq)
 
-    val sender = new JmsSender[String](connectionFactory, permanentDestination(queue)(string2textMessage))
+    val sender = new JmsSender[String](connectionHolder, permanentDestination(queue)(string2textMessage))
     Source(messagesToSend).runWith(Sink.fromSubscriber(sender))
 
     whenReady(received, timeout(Span(10, Seconds))) {
@@ -56,7 +58,7 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
 
     val received = Future.sequence(
       messagesToSend
-        .map(q => new JmsReceiver(connectionFactory, Queue(q)))
+        .map(q => new JmsReceiver(connectionHolder, Queue(q)))
         .map(Source.fromPublisher).map(_.collect(extractText).take(1).runWith(Sink.head))
     )
 
@@ -64,7 +66,7 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
     val sendMessagesToDifferentQueues: DestinationAwareMessageFactory[String] =
       (session, elem) => (session.createTextMessage(elem), Queue(elem)(session))
 
-    val sender = new JmsSender[String](connectionFactory, sendMessagesToDifferentQueues)
+    val sender = new JmsSender[String](connectionHolder, sendMessagesToDifferentQueues)
     Source(messagesToSend).runWith(Sink.fromSubscriber(sender))
 
     whenReady(received, timeout(Span(10, Seconds))) {
@@ -77,22 +79,22 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
 
     val messagesReceivedByClients = Future.sequence(
       messagesToSend
-        .map(q => new JmsReceiver(connectionFactory, Queue(q)))
+        .map(q => new JmsReceiver(connectionHolder, Queue(q)))
         .map(Source.fromPublisher).map(_.collect(extractText).take(1).runWith(Sink.head))
     )
 
     // Main pipeline
-    Source.fromPublisher(new JmsReceiver(connectionFactory, Queue("in"))).take(3)
+    Source.fromPublisher(new JmsReceiver(connectionHolder, Queue("in"))).take(3)
       .collect {
         case msg: TextMessage => (msg.getText, msg.getJMSReplyTo) // store JMSReplyTo header with message body
-      }.runWith(Sink.fromSubscriber(new JmsSender(connectionFactory, replyTo(string2textMessage))))
+      }.runWith(Sink.fromSubscriber(new JmsSender(connectionHolder, replyTo(string2textMessage))))
 
     // just enriches a newly created text message with JMSReplyTo
     val sendReplyToHeader: DestinationAwareMessageFactory[String] =
       (session, elem) =>
-        (session.createTextMessage(elem).tap(_.setJMSReplyTo(Queue(elem)(session))), Queue("in")(session))
+        (mutate(session.createTextMessage(elem))(_.setJMSReplyTo(Queue(elem)(session))), Queue("in")(session))
 
-    val sender = new JmsSender[String](connectionFactory, sendReplyToHeader)
+    val sender = new JmsSender[String](connectionHolder, sendReplyToHeader)
     Source(messagesToSend).runWith(Sink.fromSubscriber(sender))
 
     whenReady(messagesReceivedByClients, timeout(Span(15, Seconds))) {
@@ -106,7 +108,7 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
     val serverIn = Queue("akka-q-1")
     val clientIn = Queue("akka-q-2")
 
-    val result = Source.fromPublisher(new JmsReceiver(connectionFactory, clientIn))
+    val result = Source.fromPublisher(new JmsReceiver(connectionHolder, clientIn))
       .collect(extractText)
       .take(messagesToSend.size)
       .runWith(Sink.seq).map(_.toList)
@@ -115,14 +117,14 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
                         (messageFactory: DestinationAwareMessageFactory[T]): DestinationAwareMessageFactory[T] =
       (session, element) =>
         messageFactory(session, element) match {
-          case (msg, destination) => (msg.tap(_.setJMSReplyTo(replyTo(session))), destination)
+          case (msg, destination) => (mutate(msg)(_.setJMSReplyTo(replyTo(session))), destination)
         }
 
-    Source.fromPublisher(new JmsReceiver(connectionFactory, serverIn)).collect {
+    Source.fromPublisher(new JmsReceiver(connectionHolder, serverIn)).collect {
       case msg: TextMessage => (msg.getText, msg.getJMSReplyTo)
-    }.take(messagesToSend.size).runWith(Sink.fromSubscriber(new JmsSender(connectionFactory, replyTo(string2textMessage))))
+    }.take(messagesToSend.size).runWith(Sink.fromSubscriber(new JmsSender(connectionHolder, replyTo(string2textMessage))))
 
-    val clientRequests = new JmsSender[String](connectionFactory,
+    val clientRequests = new JmsSender[String](connectionHolder,
       enrichReplyTo(clientIn)(permanentDestination(serverIn)(string2textMessage)))
     Source(messagesToSend).runWith(Sink.fromSubscriber(clientRequests))
 

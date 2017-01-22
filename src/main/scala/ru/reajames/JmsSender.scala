@@ -12,12 +12,11 @@ import javax.jms.{Connection, ConnectionFactory, MessageProducer, Session}
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 22.12.16 3:49.
   */
-class JmsSender[T](connectionFactory: ConnectionFactory,
-                   messageFactory: DestinationAwareMessageFactory[T],
-                   credentials: Option[(String, String)] = None)
+class JmsSender[T](connectionHolder: ConnectionHolder,
+                   messageFactory: DestinationAwareMessageFactory[T])
                   (implicit executionContext: ExecutionContext) extends Subscriber[T] with Logging {
 
-  private[reajames] var state: Subscriber[T] = Unsubscribed.asInstanceOf[Subscriber[T]]
+  private[reajames] var state: Subscriber[T] = unsubscribed
 
   def onSubscribe(subscription: Subscription): Unit =
     if (subscription != null) state.onSubscribe(subscription)
@@ -27,10 +26,12 @@ class JmsSender[T](connectionFactory: ConnectionFactory,
   def onComplete(): Unit = state.onComplete()
   def onError(th: Throwable): Unit = state.onError(th)
 
+  private def unsubscribed = Unsubscribed.asInstanceOf[Subscriber[T]]
+
   object Unsubscribed extends Subscriber[Any] {
     def onSubscribe(subscription: Subscription): Unit = Future {
       val connected = for {
-        c <- connection(connectionFactory, credentials)
+        c <- connectionHolder.connection
         s <- session(c)
         p <- producer(s)
       } yield Subscribed(c, s, p, subscription)
@@ -41,7 +42,7 @@ class JmsSender[T](connectionFactory: ConnectionFactory,
           state = ctx
           subscription.request(1)
         case Failure(th) =>
-          logger.error("Could not establish connection using $connectionFactory!", th)
+          logger.error(s"Could not establish connection using $connectionHolder!", th)
           subscription.cancel()
       }
     }
@@ -67,28 +68,28 @@ class JmsSender[T](connectionFactory: ConnectionFactory,
           logger.debug("Sent {}", msg)
           subscription.request(1)
         case Failure(th) =>
-          logger.warn(s"Could not send a message to $destination, closing connection!", th)
+          logger.warn(s"Could not send a message to $destination, closing producer!", th)
           subscription.cancel()
-          state = Unsubscribed.asInstanceOf[Subscriber[T]]
-          close(connection).recover {
-            case throwable => logger.warn("An error occurred during closing connection!", throwable)
+          state = unsubscribed
+          close(producer).recover {
+            case throwable => logger.warn("An error occurred during closing producer!", throwable)
           }
       }
     }
 
     def onError(th: Throwable): Unit = Future {
       logger.warn(s"An error occurred in the upstream, closing $connection!", th)
-      state = Unsubscribed.asInstanceOf[Subscriber[T]]
-      close(connection).recover {
-        case throwable => logger.warn("An error occurred during closing connection!", throwable)
+      state = unsubscribed
+      close(producer).recover {
+        case throwable => logger.warn("An error occurred during closing producer!", throwable)
       }
     }
 
     def onComplete(): Unit = Future {
       logger.debug("Upstream has been completed, closing {}", connection)
-      state = Unsubscribed.asInstanceOf[Subscriber[T]]
-      close(connection).recover {
-        case th => logger.warn("An error occurred during closing connection!", th)
+      state = unsubscribed
+      close(producer).recover {
+        case th => logger.warn("An error occurred when closing producer!", th)
       }
     }
 

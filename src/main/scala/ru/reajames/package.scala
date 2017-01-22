@@ -75,4 +75,17 @@ package object reajames {
 
   def replyTo[T](messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[(T, JmsDestination)] =
     (session, elem) => (messageFactory(session, elem._1), elem._2)
+
+  /**
+    * Provides a handy method to mutate an object with one or more mutator functions.
+    * @param obj an object to be modified by functions
+    * @param mutators mutates the object
+    * @tparam T input object type
+    * @tparam U mutators output type
+    * @return the mutated object
+    */
+  def mutate[T <: AnyRef, U](obj: T)(mutators: (T => U)*): T = {
+    mutators.foreach(_.apply(obj))
+    obj
+  }
 }

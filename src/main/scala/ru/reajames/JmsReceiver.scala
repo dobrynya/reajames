@@ -13,8 +13,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 21.12.16 0:14.
   */
-class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: DestinationFactory,
-                  credentials: Option[(String, String)] = None, clientId: Option[String] = None)
+class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: DestinationFactory)
                  (implicit executionContext: ExecutionContext) extends Publisher[Message] with Logging {
 
   def subscribe(subscriber: Subscriber[_ >: Message]): Unit = {
@@ -23,8 +22,7 @@ class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: Dest
 
     Future {
       val subscription = for {
-        c <- connection(connectionFactory, credentials, clientId)
-        _ <- start(c)
+        c <- connectionHolder.connection
         s <- session(c)
         d <- destination(s, destinationFactory)
         consumer <- consumer(s, d)
@@ -58,9 +56,6 @@ class JmsReceiver(connectionFactory: ConnectionFactory, destinationFactory: Dest
           if (requested.get() == 0) subscriber.onComplete() // no receiving thread so explicitly complete subscriber
           close(consumer).recover {
             case th => logger.warn("An error occurred during closing consumer!", th)
-          }
-          close(connection).recover {
-            case th => logger.warn("An error occurred during closing connection!", th)
           }
           logger.debug("Cancelled subscription to {}", destinationFactory)
         }

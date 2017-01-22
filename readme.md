@@ -13,7 +13,7 @@ import concurrent.ExecutionContext.Implicits.global
 
 def connectionFactory: ConnectionFactory
 
-new JmsReceiver(connectionFactory, Queue("in-queue"))
+new JmsReceiver(new ConnectionHolder(connectionFactory), Queue("in-queue"))
   .subscribe(new OnNextSubscriber(message => println(message)))
 ```
 
@@ -28,6 +28,6 @@ def connectionFactory: ConnectionFactory
 def publisher: Publisher[Data]
 
 publisher.subscribe(
-  new JmsSender[String](connectionFactory, permanentDestination(Topic("events"))(string2textMessage))
+  new JmsSender(new ConnectionHolder(connectionFactory), permanentDestination(Topic("events"))(string2textMessage))
 )
 ```
