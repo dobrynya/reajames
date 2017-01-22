@@ -9,5 +9,7 @@ import org.apache.activemq.ActiveMQConnectionFactory
   */
 trait ActimeMQConnectionFactoryAware {
   implicit val connectionFactory =
-    new ActiveMQConnectionFactory(s"vm://test-broker?broker.persistent=false&broker.useJmx=false")
+    new ActiveMQConnectionFactory("vm://test-broker?broker.persistent=false&broker.useJmx=false")
+  def failingConnectionFactory =
+    new ActiveMQConnectionFactory("tcp://non-existent-host:61616?broker.persistent=false&broker.useJmx=false")
 }

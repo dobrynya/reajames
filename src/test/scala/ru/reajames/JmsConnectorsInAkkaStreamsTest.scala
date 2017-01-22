@@ -12,7 +12,7 @@ import scala.concurrent.Future
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 22.12.16 2:44.
   */
-class JmsConnectorsInAkkaStreamTest extends FlatSpec with Matchers with BeforeAndAfterAll with ScalaFutures
+class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeAndAfterAll with ScalaFutures
   with ActimeMQConnectionFactoryAware with JmsUtilities {
   behavior of "JMS connectors"
 
@@ -100,13 +100,12 @@ class JmsConnectorsInAkkaStreamTest extends FlatSpec with Matchers with BeforeAn
     }
   }
 
-  "Jms components" should "create a channel through a temporary queue" in {
+  "Jms components" should "create a channel through a queue" in {
     val messagesToSend = List("message 1", "message 2", "message 3")
 
     val serverIn = Queue("akka-q-1")
     val clientIn = Queue("akka-q-2")
 
-    // listen to a temporary queue
     val result = Source.fromPublisher(new JmsReceiver(connectionFactory, clientIn))
       .collect(extractText)
       .take(messagesToSend.size)

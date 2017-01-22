@@ -68,7 +68,7 @@ package object reajames {
     * Creates a message using specified data element as well as message destination.
     * @tparam T specifies data type
     */
-  type DestinationAwareMessageFactory[T] = (Session, T) => (Message, JmsDestination)
+  type DestinationAwareMessageFactory[-T] = (Session, T) => (Message, JmsDestination)
 
   def permanentDestination[T](destinationFactory: DestinationFactory)(messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[T] =
     (session, elem) => (messageFactory(session, elem), destinationFactory(session))

@@ -17,6 +17,9 @@ class JmsOnFfmqTest extends FlatSpec with JmsSpec with BeforeAndAfterAll {
   val connectionFactory =
     new FFMQConnectionFactory(new JHT[String, AnyRef](Map("java.naming.provider.url" -> "vm://test-broker").asJava))
 
+  def failingConnectionFactory =
+    new FFMQConnectionFactory(new JHT[String, AnyRef](Map("java.naming.provider.url" -> "failing://failing-broker").asJava))
+
   private val broker = {
     val externalProperties = new Properties()
     externalProperties.load(getClass.getResourceAsStream("/ffmq/ffmq-server.properties"))

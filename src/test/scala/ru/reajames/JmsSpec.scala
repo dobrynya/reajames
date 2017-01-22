@@ -13,6 +13,7 @@ import javax.jms.{Destination => JmsDestination, _}
   */
 trait JmsSpec extends Matchers { this: FlatSpec =>
   def connectionFactory: ConnectionFactory
+  def failingConnectionFactory: ConnectionFactory
 
   "Jms" should "sucessfully create connection" in {
     connection(connectionFactory) should matchPattern {
