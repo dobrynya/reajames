@@ -102,11 +102,11 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
     }
   }
 
-  "Jms components" should "create a channel through a queue" in {
+  "Jms components" should "create a channel through a temporary queue" in {
     val messagesToSend = List("message 1", "message 2", "message 3")
 
     val serverIn = Queue("akka-q-1")
-    val clientIn = Queue("akka-q-2")
+    val clientIn = TemporaryQueue()
 
     val result = Source.fromPublisher(new JmsReceiver(connectionHolder, clientIn))
       .collect(extractText)

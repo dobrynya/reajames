@@ -29,7 +29,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
 
     sendMessages(messagesToBeSent, string2textMessage, queue)
 
-    whenReady(received) {
+    whenReady(received, timeout(Span(500, Millis))) {
       _ == messagesToBeSent.take(25)
     }
   }
@@ -101,11 +101,11 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
     }
   }
 
-  "Jms components" should "create a channel through a queue" in {
+  "Jms components" should "create a channel through a temporary queue" in {
     val messagesToSend = List("message 1", "message 2", "message 3")
 
     val serverIn = Queue("swave-q-1")
-    val clientIn = Queue("swawe-q-2")
+    val clientIn = TemporaryQueue()
 
     val result = Spout.fromPublisher(new JmsReceiver(connectionHolder, clientIn))
       .collect(extractText)

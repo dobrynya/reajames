@@ -56,7 +56,25 @@ package object reajames {
     }
 
     override def toString(): String =
-      if (cached != null) cached.toString else "CachingDestinationFactory"
+      "CachingDestinationFactory(%)".format(if (cached != null) cached.toString else "uninitialized")
+  }
+
+  /**
+    * Creates a temporary queue and caches it for later use.
+    */
+  object TemporaryQueue {
+    def apply(): DestinationFactory = new DestinationFactory with CachingDestinationFactory {
+      private[reajames] def create(session: Session) = session.createTemporaryQueue()
+    }
+  }
+
+  /**
+    * Creates a temporary topic and caches it for later use.
+    */
+  object TemporaryTopic {
+    def apply(): DestinationFactory = new DestinationFactory with CachingDestinationFactory {
+      private[reajames] def create(session: Session) = session.createTemporaryTopic()
+    }
   }
 
   /**
