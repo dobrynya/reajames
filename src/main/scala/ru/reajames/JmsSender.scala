@@ -3,8 +3,8 @@ package ru.reajames
 import Jms._
 import org.reactivestreams._
 import scala.util.{Failure, Success}
+import javax.jms.{MessageProducer, Session}
 import scala.concurrent.{ExecutionContext, Future}
-import javax.jms.{Connection, ConnectionFactory, MessageProducer, Session}
 
 /**
   * Represents a subscriber in terms of reactive streams. It provides ability to connect a JMS destination and
@@ -30,21 +30,19 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
 
   object Unsubscribed extends Subscriber[Any] {
     def onSubscribe(subscription: Subscription): Unit = Future {
-      val connected = for {
+      for {
         c <- connectionHolder.connection
         s <- session(c)
         p <- producer(s)
-      } yield Subscribed(c, s, p, subscription)
-
-      connected match {
-        case Success(ctx) =>
-          logger.debug("Successfully established connection {}", ctx.connection)
-          state = ctx
-          subscription.request(1)
-        case Failure(th) =>
-          logger.error(s"Could not establish connection using $connectionHolder!", th)
-          subscription.cancel()
+      } {
+        logger.debug("Successfully created producer {}", p)
+        state = Subscribed(s, p, subscription)
+        subscription.request(1)
       }
+    } recover {
+      case th =>
+        logger.error(s"Could not create producer using $connectionHolder!", th)
+        subscription.cancel()
     }
 
     def onError(th: Throwable): Unit =
@@ -57,7 +55,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
       logger.warn("JmsSender is unsubscribed but onNext({}) has been received!", element)
   }
 
-  case class Subscribed(connection: Connection, session: Session, producer: MessageProducer, subscription: Subscription)
+  case class Subscribed(session: Session, producer: MessageProducer, subscription: Subscription)
     extends Subscriber[T] {
 
     def onNext(elem: T): Unit = Future {
@@ -65,7 +63,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
 
       send(producer, message, destination) match {
         case Success(msg) =>
-          logger.debug("Sent {}", msg)
+          logger.trace("Sent {}", msg)
           subscription.request(1)
         case Failure(th) =>
           logger.warn(s"Could not send a message to $destination, closing producer!", th)
@@ -78,7 +76,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     }
 
     def onError(th: Throwable): Unit = Future {
-      logger.warn(s"An error occurred in the upstream, closing $connection!", th)
+      logger.warn(s"An error occurred in the upstream, closing producer!", th)
       state = unsubscribed
       close(producer).recover {
         case throwable => logger.warn("An error occurred during closing producer!", throwable)
@@ -86,7 +84,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     }
 
     def onComplete(): Unit = Future {
-      logger.debug("Upstream has been completed, closing {}", connection)
+      logger.debug("Upstream has been completed, closing {}", producer)
       state = unsubscribed
       close(producer).recover {
         case th => logger.warn("An error occurred when closing producer!", th)

@@ -56,7 +56,7 @@ package object reajames {
     }
 
     override def toString(): String =
-      "CachingDestinationFactory(%)".format(if (cached != null) cached.toString else "uninitialized")
+      "CachingDestinationFactory(%s)".format(if (cached != null) cached.toString else "uninitialized")
   }
 
   /**
@@ -93,6 +93,32 @@ package object reajames {
 
   def replyTo[T](messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[(T, JmsDestination)] =
     (session, elem) => (messageFactory(session, elem._1), elem._2)
+
+  /**
+    * Processes a message after being created to make some enrichment or something else.
+    * @param messageFactory original message factory
+    * @param mutators message postprocessors
+    * @tparam T data type
+    * @return message factory with enabled e
+    */
+  def enrichMessage[T](messageFactory: DestinationAwareMessageFactory[T])
+                      (mutators: ((Session, Message) => Unit)*): DestinationAwareMessageFactory[T] =
+    (session, elem) =>
+      messageFactory(session, elem) match {
+        case (message, destination) =>
+          (mutate(message)(mutators.map(_.curried.apply(session)) :_*), destination)
+      }
+
+  /**
+    * Enriches a message with JMSReplyTo header before sending it.
+    * @param replyTo specifies destination to set into the header
+    * @param messageFactory message factory
+    * @tparam T element type
+    * @return enriching message factory
+    */
+  def enrichReplyTo[T](replyTo: DestinationFactory)
+                      (messageFactory: DestinationAwareMessageFactory[T]): DestinationAwareMessageFactory[T] =
+    enrichMessage(messageFactory)((session, message) => message.setJMSReplyTo(replyTo(session)))
 
   /**
     * Provides a handy method to mutate an object with one or more mutator functions.

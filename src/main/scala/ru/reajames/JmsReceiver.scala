@@ -44,7 +44,7 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
       val requested = new AtomicLong(0)
 
       def request(n: Long): Unit = {
-        logger.debug("Requested {} from {}", n, destinationFactory)
+        logger.trace("Requested {} from {}", n, destinationFactory)
         if (n <= 0)
           throw new IllegalArgumentException(s"Wrong requested items amount $n!")
         else if (requested.getAndAdd(n) == 0)
@@ -64,13 +64,14 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
       private def receiveMessage(): Unit = {
         receive(consumer).map {
           case Some(msg) =>
-            logger.debug("Received {}", msg)
+            logger.trace("Received {}", msg)
             subscriber.onNext(msg)
           case None =>
-            logger.debug("Consumer possibly has been closed, completing subscriber")
+            logger.trace("Consumer possibly has been closed, completing subscriber")
             subscriber.onComplete()
         } recover {
           case th =>
+            logger.warn(s"An error occurred during receiving from $destinationFactory!", th)
             cancel()
             subscriber.onError(th)
         }

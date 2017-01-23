@@ -2,9 +2,9 @@ package ru.reajames
 
 import swave.core._
 import java.util.concurrent.Executors
-import javax.jms.{Message, TextMessage}
 import org.scalatest._, concurrent._, time._
 import scala.concurrent.{ExecutionContext, Future}
+import javax.jms.{Message, TextMessage, Destination => JmsDestination}
 
 /**
   * Tests using JMS connectors in the Swave infrastructure.
@@ -110,31 +110,28 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
     val result = Spout.fromPublisher(new JmsReceiver(connectionHolder, clientIn))
       .collect(extractText)
       .take(messagesToSend.size)
-      .onElement(s => println("Client received %s" format s))
       .drainToList(messagesToSend.size)
 
-    def enrichReplyTo[T](replyTo: DestinationFactory)
-                        (messageFactory: DestinationAwareMessageFactory[T]): DestinationAwareMessageFactory[T] =
-      (session, element) =>
-        messageFactory(session, element) match {
-          case (msg, destination) => (mutate(msg)(_.setJMSReplyTo(replyTo(session))), destination)
-        }
-
-    Spout.fromPublisher(new JmsReceiver(connectionHolder, serverIn)).collect {
-      case msg: TextMessage => (msg.getText, msg.getJMSReplyTo)
-    }.take(messagesToSend.size).drainTo(Drain.fromSubscriber(new JmsSender(connectionHolder, replyTo(string2textMessage))))
+    Spout.fromPublisher(new JmsReceiver(connectionHolder, serverIn))
+      .collect(extractTextAndDest)
+      .take(messagesToSend.size)
+      .drainTo(Drain.fromSubscriber(new JmsSender(connectionHolder, replyTo(string2textMessage))))
 
     val clientRequests = new JmsSender[String](connectionHolder,
       enrichReplyTo(clientIn)(permanentDestination(serverIn)(string2textMessage)))
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(clientRequests))
 
-    whenReady(result, timeout(Span(10, Seconds))) {
+    whenReady(result, timeout(Span(500, Millis))) {
       _ == messagesToSend
     }
   }
 
   def extractText: PartialFunction[Message, String] = {
     case msg: TextMessage => msg.getText
+  }
+
+  def extractTextAndDest: PartialFunction[Message, (String, JmsDestination)] = {
+    case msg: TextMessage => (msg.getText, msg.getJMSDestination)
   }
 
   override protected def afterAll(): Unit = env.shutdown()
