@@ -131,7 +131,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
   }
 
   def extractTextAndDest: PartialFunction[Message, (String, JmsDestination)] = {
-    case msg: TextMessage => (msg.getText, msg.getJMSDestination)
+    case msg: TextMessage => (msg.getText, msg.getJMSReplyTo)
   }
 
   override protected def afterAll(): Unit = env.shutdown()
