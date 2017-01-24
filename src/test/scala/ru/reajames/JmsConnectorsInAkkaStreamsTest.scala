@@ -128,9 +128,7 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
       enrichReplyTo(clientIn)(permanentDestination(serverIn)(string2textMessage)))
     Source(messagesToSend).runWith(Sink.fromSubscriber(clientRequests))
 
-    whenReady(result, timeout(Span(15, Seconds))) {
-      _ == messagesToSend
-    }
+    whenReady(result) { _ == messagesToSend }
   }
 
   def extractText: PartialFunction[Message, String] = {

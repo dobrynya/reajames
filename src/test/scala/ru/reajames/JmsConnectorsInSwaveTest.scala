@@ -121,9 +121,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
       enrichReplyTo(clientIn)(permanentDestination(serverIn)(string2textMessage)))
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(clientRequests))
 
-    whenReady(result, timeout(Span(500, Millis))) {
-      _ == messagesToSend
-    }
+    whenReady(result) { _ == messagesToSend }
   }
 
   def extractText: PartialFunction[Message, String] = {

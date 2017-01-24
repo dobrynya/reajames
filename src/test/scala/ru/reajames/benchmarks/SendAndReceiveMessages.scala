@@ -32,10 +32,8 @@ object SendAndReceiveMessages extends Bench[Double] with ActimeMQConnectionFacto
     measure method "send and receive all messages" in {
       using(messages) in { messagesToSend =>
         new UseCase(messagesToSend)
-
       }
     }
-    env.shutdown()
   }
 
   val connectionHolder = new ConnectionHolder(connectionFactory)
