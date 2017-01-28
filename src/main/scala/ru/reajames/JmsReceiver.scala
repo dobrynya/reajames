@@ -12,6 +12,9 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
   * Represents a publisher in terms of reactive streams.
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 21.12.16 0:14.
+  * @param connectionHolder contains connection to create JMS related components
+  * @param destinationFactory specifies source of messages
+  * @param executionContext executes receiving messages
   */
 class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: DestinationFactory)
                  (implicit executionContext: ExecutionContext) extends Publisher[Message] with Logging {

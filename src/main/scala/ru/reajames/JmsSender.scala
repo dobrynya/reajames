@@ -3,20 +3,35 @@ package ru.reajames
 import Jms._
 import org.reactivestreams._
 import scala.util.{Failure, Success}
-import javax.jms.{MessageProducer, Session}
 import scala.concurrent.{ExecutionContext, Future}
+import javax.jms.{Message, MessageProducer, Session}
 
 /**
   * Represents a subscriber in terms of reactive streams. It provides ability to connect a JMS destination and
   * listen to messages.
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 22.12.16 3:49.
+  * @param connectionHolder contains connection to create JMS related components
+  * @param messageFactory creates JMS messages from data elements and provides destination for messages
+  * @param executionContext executes sending messages
   */
 class JmsSender[T](connectionHolder: ConnectionHolder,
                    messageFactory: DestinationAwareMessageFactory[T])
                   (implicit executionContext: ExecutionContext) extends Subscriber[T] with Logging {
   require(connectionHolder != null, "Connection holder should be supplied!")
   require(messageFactory != null, "Destination aware message factory should be supplied!")
+
+  /**
+    * Creates a JMS sender to send messages to a permanent destination.
+    * @param connectionHolder connection holder
+    * @param destination destination for messages
+    * @param messageFactory message factory
+    * @param executionContext executes sending messages
+    * @return created sender
+    */
+  def this(connectionHolder: ConnectionHolder, destination: DestinationFactory,
+           messageFactory: (Session, T) => Message)(implicit executionContext: ExecutionContext) =
+    this(connectionHolder, permanentDestination(destination)(messageFactory))
 
   private[reajames] var state: Subscriber[T] = unsubscribed
 
