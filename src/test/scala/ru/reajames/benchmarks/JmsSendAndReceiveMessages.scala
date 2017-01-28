@@ -1,19 +1,17 @@
 package ru.reajames.benchmarks
 
 import javax.jms.{Message, TextMessage}
-
 import org.scalameter.api._
 import org.scalameter.picklers.Implicits._
 import org.slf4j.LoggerFactory
 import ru.reajames.Jms._
 import ru.reajames._
-
 import scala.concurrent.Future
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
 /**
-  * Benchmark on producing and consumption by reajames components.
+  * Benchmark on producing and consumption by JMS components only.
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 22.01.17 19:24.
   */
@@ -29,7 +27,7 @@ object JmsSendAndReceiveMessages extends Bench[Double] with ActimeMQConnectionFa
 
   import concurrent.ExecutionContext.Implicits.global
 
-  performance of "Reajames" in {
+  performance of "JMS" in {
     measure method "send and receive all messages" in {
       using(messages) in { messagesToSend =>
         new UseCase(messagesToSend)
@@ -71,7 +69,7 @@ object JmsSendAndReceiveMessages extends Bench[Double] with ActimeMQConnectionFa
       cons <- consumer(s, d)
     } yield {
       val res = messages.map { _ =>
-        receive(cons, Some(150)) match {
+        receive(cons) match {
           case Success(Some(m: TextMessage)) =>
             val r = m.getText
             logger.trace("Received {}", r)

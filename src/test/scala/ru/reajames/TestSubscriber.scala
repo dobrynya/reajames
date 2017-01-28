@@ -61,10 +61,10 @@ case class QueuePublisher[T](list: List[T]) extends Publisher[T] {
 
       def request(n: Long) =
         cancelled.getOrElse {
-          queue.headOption.map { e =>
+          (1L to n).foreach(_ => queue.headOption.map { e =>
             s.onNext(e)
             queue = queue.tail
-          }.getOrElse(s.onComplete())
+          }.getOrElse(s.onComplete()))
         }
     })
   }
