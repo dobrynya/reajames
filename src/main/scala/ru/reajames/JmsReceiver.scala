@@ -15,6 +15,8 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
   */
 class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: DestinationFactory)
                  (implicit executionContext: ExecutionContext) extends Publisher[Message] with Logging {
+  require(connectionHolder != null, "Connection holder should be supplied!")
+  require(destinationFactory != null, "Destination factory should be supplied!")
 
   def subscribe(subscriber: Subscriber[_ >: Message]): Unit = {
     if (subscriber == null)

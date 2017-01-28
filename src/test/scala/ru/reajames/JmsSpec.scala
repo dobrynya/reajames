@@ -38,14 +38,19 @@ trait JmsSpec extends Matchers { this: FlatSpec =>
     }
   }
 
-  it should "create destinations" in {
+  it should "create destinations and message to it" in {
     for {
       c <- connection(connectionFactory)
       s <- session(c)
-      destinationFactory <- List(Queue("queue"), Topic("topic"))
+      destinationFactory <- List(
+        Queue("queue-150"), Topic("topic"), TemporaryQueue(), TemporaryTopic(), Destination(TemporaryQueue()(s))
+      )
       destination <- destination(s, destinationFactory)
-    }
+      p <- producer(s)
+    } {
       destination shouldBe a[JmsDestination]
+      send(p, s.createTextMessage("message to be sent"), destination).isSuccess should equal(true)
+    }
   }
 
   it should "create a message consumer" in {
@@ -85,7 +90,7 @@ trait JmsSpec extends Matchers { this: FlatSpec =>
     for {
       c <- connection(connectionFactory)
       s <- session(c)
-      d <- destination(s, Queue("queue"))
+      d <- destination(s, Queue("queue-100"))
       p <- producer(s, d)
     } {
       messages.map(string2textMessage(s, _)).foreach(send(p, _))
@@ -96,7 +101,7 @@ trait JmsSpec extends Matchers { this: FlatSpec =>
       c <- connection(connectionFactory)
       _ <- start(c)
       s <- session(c)
-      d <- destination(s, Queue("queue"))
+      d <- destination(s, Queue("queue-100"))
       consumer <- consumer(s, d)
     } {
       messages.map(_ -> receive(consumer)).collect {

@@ -15,6 +15,8 @@ import scala.concurrent.{ExecutionContext, Future}
 class JmsSender[T](connectionHolder: ConnectionHolder,
                    messageFactory: DestinationAwareMessageFactory[T])
                   (implicit executionContext: ExecutionContext) extends Subscriber[T] with Logging {
+  require(connectionHolder != null, "Connection holder should be supplied!")
+  require(messageFactory != null, "Destination aware message factory should be supplied!")
 
   private[reajames] var state: Subscriber[T] = unsubscribed
 
@@ -30,19 +32,19 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
 
   object Unsubscribed extends Subscriber[Any] {
     def onSubscribe(subscription: Subscription): Unit = Future {
-      for {
+      (for {
         c <- connectionHolder.connection
         s <- session(c)
         p <- producer(s)
-      } {
+      } yield {
         logger.debug("Successfully created producer {}", p)
         state = Subscribed(s, p, subscription)
         subscription.request(1)
+      }) recover {
+        case th =>
+          logger.error(s"Could not create producer using $connectionHolder!", th)
+          subscription.cancel()
       }
-    } recover {
-      case th =>
-        logger.error(s"Could not create producer using $connectionHolder!", th)
-        subscription.cancel()
     }
 
     def onError(th: Throwable): Unit =

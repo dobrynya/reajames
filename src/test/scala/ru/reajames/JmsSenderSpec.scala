@@ -25,6 +25,22 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
     sender.onNext("Test message")
   }
 
+  "Unsubscribed" should "throw an exception when no subscription is supplied" in {
+    intercept[NullPointerException] {
+      new JmsSender[String](connectionHolder, permanentDestination(Queue("some-queue"))(string2textMessage))
+        .onSubscribe(null)
+    }
+  }
+
+  "JmsSender" should "not allow constructing an instance without required parameters" in {
+    intercept[IllegalArgumentException] {
+      new JmsSender[String](null, null)
+    }
+    intercept[IllegalArgumentException] {
+      new JmsSender[String](connectionHolder, null)
+    }
+  }
+
   "JmsSender" should "be able to connect the broker only once" in {
     val sender = new JmsSender[String](connectionHolder, permanentDestination(Queue("queue-13"))(string2textMessage))
 

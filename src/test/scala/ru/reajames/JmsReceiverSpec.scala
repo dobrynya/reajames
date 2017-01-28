@@ -22,6 +22,15 @@ class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities with Acti
     intercept[NullPointerException](pub.subscribe(null))
   }
 
+  it should "not allow constructing an instance without required parameters" in {
+    intercept[IllegalArgumentException] {
+      new JmsReceiver(null, null)
+    }
+    intercept[IllegalArgumentException] {
+      new JmsReceiver(connectionHolder, null)
+    }
+  }
+
   it should "publish messages arrived to a JMS queue" in {
     val queue = Queue("queue-6")
     val pub = stopper(new JmsReceiver(connectionHolder, queue), 500)

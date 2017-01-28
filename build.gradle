@@ -1,11 +1,13 @@
 plugins {
     id "com.github.maiflai.scalatest" version "0.14"
     id "com.jfrog.bintray" version "1.7.3"
+    id "org.scoverage" version "2.1.0"
 }
 
 apply plugin: "scala"
 apply plugin: "maven"
 apply plugin: "maven-publish"
+apply plugin: "org.scoverage"
 
 repositories {
     mavenCentral()
@@ -30,6 +32,9 @@ dependencies {
     testRuntime "ch.qos.logback:logback-classic:+"
     testRuntime "org.slf4j:log4j-over-slf4j:+"
     testRuntime "org.pegdown:pegdown:1.6.0"
+
+    scoverage "org.scoverage:scalac-scoverage-plugin_2.12:+",
+              "org.scoverage:scalac-scoverage-runtime_2.12:+"
 }
 
 task sourcesJar(type: Jar, dependsOn: classes) {
@@ -101,4 +106,8 @@ bintray {
     }
 
     publications = ["MyPublication"]
+}
+
+checkScoverage {
+    minimumRate = 0.5
 }
