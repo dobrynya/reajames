@@ -3,6 +3,8 @@ package ru.reajames
 import Jms._
 import org.reactivestreams._
 import scala.util.{Failure, Success}
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.{ExecutionContext, Future}
 import javax.jms.{Message, MessageProducer, Session}
 
@@ -75,37 +77,65 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
   case class Subscribed(session: Session, producer: MessageProducer, subscription: Subscription)
     extends Subscriber[T] {
 
-    def onNext(elem: T): Unit = Future {
-      val (message, destination) = messageFactory(session, elem)
+    private[reajames] val sending = new AtomicBoolean(false)
+    private[reajames] val queue = new ConcurrentLinkedQueue[(Int, Any)]()
 
-      send(producer, message, destination) match {
-        case Success(msg) =>
-          logger.trace("Sent {}", msg)
-          subscription.request(1)
-        case Failure(th) =>
-          logger.warn(s"Could not send a message to $destination, closing producer!", th)
-          subscription.cancel()
-          state = unsubscribed
-          close(producer).recover {
-            case throwable => logger.warn("An error occurred during closing producer!", throwable)
-          }
+    private def poll(): Unit = {
+      while (!queue.isEmpty) {
+        queue.poll() match {
+          case (1, elem: T) =>
+            val (message, destination) = messageFactory(session, elem)
+
+            send(producer, message, destination) match {
+              case Success(msg) =>
+                logger.trace("Sent {}", msg)
+                subscription.request(1)
+              case Failure(th) =>
+                logger.warn(s"Could not send a message to $destination, closing producer!", th)
+                subscription.cancel()
+                state = unsubscribed
+                close(producer).recover {
+                  case throwable => logger.warn("An error occurred during closing producer!", throwable)
+                }
+            }
+
+          case (2, th: Throwable) =>
+            logger.warn(s"An error occurred in the upstream, closing producer!", th)
+            state = unsubscribed
+            queue.clear()
+            close(producer).recover {
+              case throwable => logger.warn("An error occurred during closing producer!", throwable)
+            }
+
+          case (3, _) =>
+            logger.debug("Upstream has been completed, closing {}", producer)
+            state = unsubscribed
+            queue.clear()
+            close(producer).recover {
+              case th => logger.warn("An error occurred when closing producer!", th)
+            }
+        }
       }
+
+      sending.set(false)
     }
 
-    def onError(th: Throwable): Unit = Future {
-      logger.warn(s"An error occurred in the upstream, closing producer!", th)
-      state = unsubscribed
-      close(producer).recover {
-        case throwable => logger.warn("An error occurred during closing producer!", throwable)
-      }
+    private[reajames] def runIfNot: Unit =
+      if (sending.compareAndSet(false, true)) Future (poll())
+
+    def onNext(elem: T): Unit = {
+      queue.offer(1 -> elem)
+      runIfNot
+    }
+
+    def onError(th: Throwable): Unit = {
+      queue.offer(2 -> th)
+      runIfNot
     }
 
     def onComplete(): Unit = Future {
-      logger.debug("Upstream has been completed, closing {}", producer)
-      state = unsubscribed
-      close(producer).recover {
-        case th => logger.warn("An error occurred when closing producer!", th)
-      }
+      queue.offer(3 -> null)
+      runIfNot
     }
 
     def onSubscribe(s: Subscription): Unit = s.cancel() // already subscribed
