@@ -81,7 +81,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     private[reajames] val queue = new ConcurrentLinkedQueue[(Int, Any)]()
 
     private def poll(): Unit = {
-      while (!queue.isEmpty) {
+      do {
         queue.poll() match {
           case (1, elem: T) =>
             val (message, destination) = messageFactory(session, elem)
@@ -115,9 +115,10 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
               case th => logger.warn("An error occurred when closing producer!", th)
             }
         }
-      }
+      } while (!queue.isEmpty)
 
       sending.set(false)
+      if (!queue.isEmpty) runIfNot
     }
 
     private[reajames] def runIfNot: Unit =
