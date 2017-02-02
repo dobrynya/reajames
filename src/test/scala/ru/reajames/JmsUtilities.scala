@@ -44,8 +44,10 @@ trait JmsUtilities {
     * @param messagesToReceive amount of messages to receive, infinite by default
     * @return newly created spy publisher
     */
-  def stopper(publisher: JmsReceiver, messagesToReceive: Long = Long.MaxValue) =
-    new Publisher[Message]  {
+  def stopper(publisher: JmsReceiver, messagesToReceive: Long = Long.MaxValue,
+              whenCancelled: () => Unit = () => ()) =
+
+    new Publisher[Message] {
       private var counter = messagesToReceive
       private val allPublished: Promise[Boolean] = Promise()
 
@@ -63,14 +65,16 @@ trait JmsUtilities {
         real = s
         subscribed.await()
         s.onSubscribe(new Subscription {
-          def cancel(): Unit = fake.subscription.cancel()
+          def cancel(): Unit = {
+            whenCancelled()
+            real = null
+            fake.subscription.cancel()
+          }
           def request(n: Long): Unit = fake.subscription.request(n)
         })
       }
 
-      def cancel(): Unit = {
-        complete()
-      }
+      def cancel(): Unit = complete()
 
       def request(n: Long): Unit = fake.subscription.request(n)
 

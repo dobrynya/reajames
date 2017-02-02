@@ -45,13 +45,13 @@ case class TestSubscriber(subscribe: Subscription => Unit = s => (),
 
 /**
   * Just sends specified list to a subscriber on request.
-  * @param list messages to be sent
+  * @param iterable messages to be sent
   * @tparam T message type
   */
-case class QueuePublisher[T](list: List[T]) extends Publisher[T] {
+case class QueuePublisher[T](iterable: Iterable[T], externallyCancelled: () => Boolean = () => false) extends Publisher[T] {
   def subscribe(s: Subscriber[_ >: T]): Unit = {
     s.onSubscribe(new Subscription {
-      var queue = list
+      var iterator = iterable.iterator
       var cancelled = Option.empty[Boolean]
 
       def cancel() = cancelled match {
@@ -59,13 +59,15 @@ case class QueuePublisher[T](list: List[T]) extends Publisher[T] {
         case _ =>
       }
 
-      def request(n: Long) =
+      def request(n: Long) = {
+        if (externallyCancelled()) cancel()
         cancelled.getOrElse {
-          (1L to n).foreach(_ => queue.headOption.map { e =>
-            s.onNext(e)
-            queue = queue.tail
-          }.getOrElse(s.onComplete()))
+          (1L to n).foreach(_ =>
+            if (iterator.hasNext) s.onNext(iterator.next())
+            else s.onComplete()
+          )
         }
+      }
     })
   }
 }
