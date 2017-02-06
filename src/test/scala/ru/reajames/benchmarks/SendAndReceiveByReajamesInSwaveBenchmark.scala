@@ -32,7 +32,6 @@ object SendAndReceiveByReajamesInSwaveBenchmark extends SendAndReceiveBenchmark 
     }
   }
 
-
   override def after: Unit = env.shutdown()
 
   def extractText: PartialFunction[Message, String] = {

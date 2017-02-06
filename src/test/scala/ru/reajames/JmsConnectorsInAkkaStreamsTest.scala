@@ -4,7 +4,7 @@ import akka.stream.scaladsl._
 import akka.actor.ActorSystem
 import scala.concurrent.Future
 import akka.stream.ActorMaterializer
-import javax.jms.{Message, TextMessage}
+import javax.jms.{Message, TextMessage, Session}
 import org.scalatest._, time._, concurrent._
 
 /**
@@ -90,11 +90,10 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
       }.runWith(Sink.fromSubscriber(new JmsSender(connectionHolder, replyTo(string2textMessage))))
 
     // just enriches a newly created text message with JMSReplyTo
-    val sendReplyToHeader: DestinationAwareMessageFactory[String] =
-      (session, elem) =>
-        (mutate(session.createTextMessage(elem))(_.setJMSReplyTo(Queue(elem)(session))), Queue("in")(session))
+    val replyToElemName = (session: Session, elem: String) =>
+      mutate(session.createTextMessage(elem))(_.setJMSReplyTo(Queue(elem)(session)))
 
-    val sender = new JmsSender[String](connectionHolder, sendReplyToHeader)
+    val sender = new JmsSender(connectionHolder, Queue("in"), replyToElemName)
     Source(messagesToSend).runWith(Sink.fromSubscriber(sender))
 
     whenReady(messagesReceivedByClients, timeout(Span(15, Seconds))) {
@@ -113,19 +112,11 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
       .take(messagesToSend.size)
       .runWith(Sink.seq).map(_.toList)
 
-    def enrichReplyTo[T](replyTo: DestinationFactory)
-                        (messageFactory: DestinationAwareMessageFactory[T]): DestinationAwareMessageFactory[T] =
-      (session, element) =>
-        messageFactory(session, element) match {
-          case (msg, destination) => (mutate(msg)(_.setJMSReplyTo(replyTo(session))), destination)
-        }
-
     Source.fromPublisher(new JmsReceiver(connectionHolder, serverIn)).collect {
       case msg: TextMessage => (msg.getText, msg.getJMSReplyTo)
     }.take(messagesToSend.size).runWith(Sink.fromSubscriber(new JmsSender(connectionHolder, replyTo(string2textMessage))))
 
-    val clientRequests = new JmsSender[String](connectionHolder,
-      enrichReplyTo(clientIn)(permanentDestination(serverIn)(string2textMessage)))
+    val clientRequests = new JmsSender[String](connectionHolder, serverIn, enrichReplyTo(clientIn)(string2textMessage))
     Source(messagesToSend).runWith(Sink.fromSubscriber(clientRequests))
 
     whenReady(result) { _ == messagesToSend }

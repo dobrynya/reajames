@@ -4,6 +4,8 @@ ReaJaMeS is JMS in terms of [Reactive Streams](http://www.reactive-streams.org)
 
 The project is aimed to implementing a JMS client in terms of the Reactive Streams. Anyone can use the library for integrating JMS transport as non-blocking reactive streams identical to other RS implementations.
 
+More details in [wiki](https://github.com/dobrynya/reajames/wiki). Ideas, improvements are welcome as well as crytical analysis. I will be really appreciated.
+
 To subscribe a listener for a queue
 
 ```scala
@@ -28,6 +30,6 @@ def connectionFactory: ConnectionFactory
 def publisher: Publisher[Data]
 
 publisher.subscribe(
-  new JmsSender(new ConnectionHolder(connectionFactory), permanentDestination(Topic("events"))(string2textMessage))
+  new JmsSender(new ConnectionHolder(connectionFactory), Topic("events"), string2textMessage)
 )
 ```

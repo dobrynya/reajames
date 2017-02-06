@@ -4,10 +4,10 @@ import Jms._
 import org.reactivestreams._
 import scala.annotation.tailrec
 import scala.util.{Failure, Success}
+import javax.jms.{MessageProducer, Session}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.{ExecutionContext, Future}
-import javax.jms.{Message, MessageProducer, Session}
 
 /**
   * Represents a subscriber in terms of reactive streams. It provides ability to connect a JMS destination and
@@ -33,7 +33,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     * @return created sender
     */
   def this(connectionHolder: ConnectionHolder, destination: DestinationFactory,
-           messageFactory: (Session, T) => Message)(implicit executionContext: ExecutionContext) =
+           messageFactory: MessageFactory[T])(implicit executionContext: ExecutionContext) =
     this(connectionHolder, permanentDestination(destination)(messageFactory))
 
   private[reajames] var state: Subscriber[T] = new Unsubscribed
@@ -104,8 +104,13 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
   case class Subscribed(session: Session, producer: MessageProducer, subscription: Subscription)
     extends Subscriber[T] {
 
+    sealed trait Signal
+    case class OnNext(element: T) extends Signal
+    case class OnError(th: Throwable) extends Signal
+    case object OnComplete extends Signal
+
     private[reajames] val sending = new AtomicBoolean(false)
-    private[reajames] val queue = new ConcurrentLinkedQueue[(Int, Any)]()
+    private[reajames] val queue = new ConcurrentLinkedQueue[Signal]()
 
     private[reajames] def unsubscribe: Unit = {
       subscription.cancel()
@@ -122,33 +127,32 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
 
     private def poll(): Unit = {
       @tailrec
-      def pollIfNotEmpty: Unit = {
-        queue.poll() match {
-          case (1, elem: T) =>
-            val (message, destination) = messageFactory(session, elem)
+      def pollWhileNotEmpty: Unit = {
+        if (!queue.isEmpty) {
+          queue.poll() match {
+            case OnNext(elem) =>
+              val (message, destination) = messageFactory(session, elem)
+              send(producer, message, destination) match {
+                case Success(msg) =>
+                  logger.trace("Sent {}", msg)
+                  doRequest
+                case Failure(th) =>
+                  logger.warn(s"Could not send a message to $destination, closing producer!", th)
+                  unsubscribe
+              }
+            case OnError(th) =>
+              logger.warn(s"An error occurred in the upstream, closing producer!", th)
+              unsubscribe
+            case `OnComplete` =>
+              logger.debug("Upstream has been completed, closing {}", producer)
+              unsubscribe
+          }
 
-            send(producer, message, destination) match {
-              case Success(msg) =>
-                logger.trace("Sent {}", msg)
-                doRequest
-              case Failure(th) =>
-                logger.warn(s"Could not send a message to $destination, closing producer!", th)
-                unsubscribe
-            }
-
-          case (2, th: Throwable) =>
-            logger.warn(s"An error occurred in the upstream, closing producer!", th)
-            unsubscribe
-          case (3, _) =>
-            logger.debug("Upstream has been completed, closing {}", producer)
-            unsubscribe
+          pollWhileNotEmpty
         }
-
-        if (sending.compareAndSet(false, true))
-        if (!queue.isEmpty) pollIfNotEmpty
       }
 
-      pollIfNotEmpty
+      pollWhileNotEmpty
       sending.set(false)
       if (!queue.isEmpty) runIfNot
     }
@@ -158,18 +162,18 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
 
     def onNext(element: T): Unit = {
       if (element == null) throw new NullPointerException("Element should be specified!")
-      queue.offer(1 -> element)
+      queue.offer(OnNext(element))
       runIfNot
     }
 
     def onError(th: Throwable): Unit = {
       if (th == null) throw new NullPointerException("Throwable should be specified!")
-      queue.offer(2 -> th)
+      queue.offer(OnError(th))
       runIfNot
     }
 
     def onComplete(): Unit = Future {
-      queue.offer(3 -> null)
+      queue.offer(OnComplete)
       runIfNot
     }
 

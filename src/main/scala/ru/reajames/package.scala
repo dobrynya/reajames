@@ -78,9 +78,15 @@ package object reajames {
   }
 
   /**
+    * Creates a message using session and specified data element.
+    * @tparam T specifies data type
+    */
+  type MessageFactory[-T] = (Session, T) => Message
+
+  /**
     * Creates a text message using session and a string.
     */
-  val string2textMessage: (Session, String) => Message = (session, text) => session.createTextMessage(text)
+  val string2textMessage: MessageFactory[String] = (session, text) => session.createTextMessage(text)
 
   /**
     * Creates a message using specified data element as well as message destination.
@@ -88,26 +94,11 @@ package object reajames {
     */
   type DestinationAwareMessageFactory[-T] = (Session, T) => (Message, JmsDestination)
 
-  def permanentDestination[T](destinationFactory: DestinationFactory)(messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[T] =
+  def permanentDestination[T](destinationFactory: DestinationFactory)(messageFactory: MessageFactory[T]): DestinationAwareMessageFactory[T] =
     (session, elem) => (messageFactory(session, elem), destinationFactory(session))
 
   def replyTo[T](messageFactory: (Session, T) => Message): DestinationAwareMessageFactory[(T, JmsDestination)] =
     (session, elem) => (messageFactory(session, elem._1), elem._2)
-
-  /**
-    * Processes a message after being created to make some enrichment or something else.
-    * @param messageFactory original message factory
-    * @param mutators message postprocessors
-    * @tparam T data type
-    * @return message factory with enabled e
-    */
-  def enrichMessage[T](messageFactory: DestinationAwareMessageFactory[T])
-                      (mutators: ((Session, Message) => Unit)*): DestinationAwareMessageFactory[T] =
-    (session, elem) =>
-      messageFactory(session, elem) match {
-        case (message, destination) =>
-          (mutate(message)(mutators.map(_.curried.apply(session)) :_*), destination)
-      }
 
   /**
     * Enriches a message with JMSReplyTo header before sending it.
@@ -116,9 +107,9 @@ package object reajames {
     * @tparam T element type
     * @return enriching message factory
     */
-  def enrichReplyTo[T](replyTo: DestinationFactory)
-                      (messageFactory: DestinationAwareMessageFactory[T]): DestinationAwareMessageFactory[T] =
-    enrichMessage(messageFactory)((session, message) => message.setJMSReplyTo(replyTo(session)))
+  def enrichReplyTo[T](replyTo: DestinationFactory)(messageFactory: MessageFactory[T]): MessageFactory[T] =
+    (session, element) =>
+      mutate(messageFactory(session, element))(_.setJMSReplyTo(replyTo(session)))
 
   /**
     * Provides a handy method to mutate an object with one or more mutator functions.

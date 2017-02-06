@@ -117,8 +117,8 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
       .take(messagesToSend.size)
       .drainTo(Drain.fromSubscriber(new JmsSender(connectionHolder, replyTo(string2textMessage))))
 
-    val clientRequests = new JmsSender[String](connectionHolder,
-      enrichReplyTo(clientIn)(permanentDestination(serverIn)(string2textMessage)))
+    val clientRequests =
+      new JmsSender[String](connectionHolder, serverIn, enrichReplyTo(clientIn)(string2textMessage))
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(clientRequests))
 
     whenReady(result) { _ == messagesToSend }
