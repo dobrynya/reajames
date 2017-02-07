@@ -44,83 +44,85 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
           subscriber.onError(th)
       }
     }
+  }
 
-    /**
-      * Represents a failed subscription to pass it to a subscriber.
-      */
-    object FailedSubscription extends Subscription {
-      def cancel(): Unit = ()
-      def request(n: Long): Unit = ()
+  /**
+    * Represents a failed subscription to pass it to a subscriber.
+    */
+  object FailedSubscription extends Subscription {
+    def cancel(): Unit = ()
+    def request(n: Long): Unit = ()
+  }
+
+  /**
+    * Represents a connected subscription.
+    * @param connection specifies connection of the subscription
+    * @param session specifies current session
+    * @param consumer specifies consumer
+    * @param subscriber specifies the subscriber to be notified with messages
+    */
+  class JmsSubscription(connection: Connection, session: Session, consumer: MessageConsumer,
+                        var subscriber: Subscriber[_ >: Message]) extends Subscription with Runnable {
+    val cancelled = new AtomicBoolean(false)
+    val requested = new AtomicLong(0)
+
+    def request(n: Long): Unit = {
+      logger.trace("Requested {} from {}", n, destinationFactory)
+      if (n <= 0)
+        cancelSubscription(Some(new IllegalArgumentException(s"Requested $n elements violating rule 3.9!")))
+      else {
+        val demand = Math.min(Long.MaxValue - requested.get(), n)
+        if (requested.getAndAdd(demand) == 0)
+          executionContext.execute(this)
+      }
     }
 
-    /**
-      * Represents a connected subscription.
-      * @param connection specifies connection of the subscription
-      * @param session specifies current session
-      * @param consumer specifies consumer
-      * @param subscriber specifies the subscriber to be notified with messages
-      */
-    class JmsSubscription(connection: Connection, session: Session, consumer: MessageConsumer,
-                              var subscriber: Subscriber[_ >: Message]) extends Subscription {
-      val cancelled = new AtomicBoolean(false)
-      val requested = new AtomicLong(0)
+    def cancel(): Unit = cancelSubscription()
 
-      def request(n: Long): Unit = {
-        logger.trace("Requested {} from {}", n, destinationFactory)
-        if (n <= 0)
-          cancelSubscription(Some(new IllegalArgumentException(s"Requested $n elements violating rule 3.9!")))
-        else {
-          val demand = Math.min(Long.MaxValue - requested.get(), n)
-          if (requested.getAndAdd(demand) == 0)
-            executionContext.execute(() => receiveMessage())
+    def run(): Unit = receiveMessage()
+
+    private def log(msg: => String): PartialFunction[Throwable, Unit] = {
+      case th => logger.warn(msg, th)
+    }
+
+    @inline
+    def working = !cancelled.get()
+
+    private[reajames] def cancelSubscription(cause: Option[Throwable] = None): Unit =
+      if (cancelled.compareAndSet(false, true)) {
+        for {
+          _ <- close(consumer) recover log("An error occurred during closing consumer!")
+          _ <- close(session) recover log("An error occurred during closing session!")
+        } ()
+
+        cause match {
+          case Some(th) =>
+            logger.warn("Subscription has been cancelled due to an error!", th)
+            subscriber.onError(th)
+          case None =>
+            logger.debug("Cancelled subscription to {}", destinationFactory)
         }
+
+        subscriber = null // drop subscriber
       }
 
-      def cancel(): Unit = cancelSubscription()
-
-      private def log(msg: => String): PartialFunction[Throwable, Unit] = {
-        case th => logger.warn(msg, th)
-      }
-
-      @inline
-      def working = !cancelled.get()
-
-      private[reajames] def cancelSubscription(cause: Option[Throwable] = None): Unit =
-        if (cancelled.compareAndSet(false, true)) {
-          for {
-            _ <- close(consumer) recover log("An error occurred during closing consumer!")
-            _ <- close(session) recover log("An error occurred during closing session!")
-          } ()
-
-          cause match {
-            case Some(th) =>
-              logger.warn("Subscription has been cancelled due to an error!", th)
-              subscriber.onError(th)
-            case None =>
-              logger.debug("Cancelled subscription to {}", destinationFactory)
+    @tailrec
+    private def receiveMessage(): Unit = {
+      receive(consumer) match {
+        case Success(received) =>
+          received.foreach { msg =>
+            if (working) {
+              logger.trace("Received {}", msg)
+              subscriber.onNext(msg)
+            } else logger.trace("Discarded {} due to cancelled subscription!")
           }
-
-          subscriber = null // drop subscriber
-        }
-
-      @tailrec
-      private def receiveMessage(): Unit = {
-        receive(consumer) match {
-          case Success(received) =>
-            received.foreach { msg =>
-              if (working) {
-                logger.trace("Received {}", msg)
-                subscriber.onNext(msg)
-              } else logger.trace("Discarded {} due to cancelled subscription!")
-            }
-          case Failure(th) =>
-            cancelSubscription(Some(th))
-        }
-
-        if (requested.decrementAndGet() > 0 && working) receiveMessage()
+        case Failure(th) =>
+          cancelSubscription(Some(th))
       }
 
-      override def toString: String = "JmsSubscription(%s,%s)".format(connection, destinationFactory)
+      if (requested.decrementAndGet() > 0 && working) receiveMessage()
     }
+
+    override def toString: String = "JmsSubscription(%s,%s)".format(connection, destinationFactory)
   }
 }

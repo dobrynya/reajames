@@ -46,7 +46,7 @@ package object reajames {
     * Creates a destination and caches it for future use. This component should not be used concurrently.
     */
   trait CachingDestinationFactory extends DestinationFactory {
-    private var cached = new AtomicReference[JmsDestination]()
+    private val cached = new AtomicReference[JmsDestination]()
 
     private[reajames] def create(session: Session): JmsDestination
 

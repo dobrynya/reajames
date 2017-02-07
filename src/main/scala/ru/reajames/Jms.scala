@@ -1,7 +1,7 @@
 package ru.reajames
 
 import scala.util.Try
-import javax.jms.{Destination => JmsDestination, ConnectionFactory, Connection, Session, Message, MessageConsumer, MessageProducer}
+import javax.jms.{Destination => JmsDestination, _}
 
 /**
   * Provides helpful methods to work with JMS.
