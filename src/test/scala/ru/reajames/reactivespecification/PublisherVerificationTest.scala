@@ -14,7 +14,7 @@ import org.reactivestreams.tck.{PublisherVerification, TestEnvironment}
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 31.01.17 14:15.
   */
-class PublisherVerificationTest extends PublisherVerification[Message](new TestEnvironment()) with
+class PublisherVerificationTest extends PublisherVerification[Message](new TestEnvironment(300)) with
   JmsUtilities with ActimeMQConnectionFactoryAware with TestNGSuiteLike {
   val counter = new AtomicInteger()
 

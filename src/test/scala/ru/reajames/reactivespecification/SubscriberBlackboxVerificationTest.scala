@@ -12,7 +12,7 @@ import org.reactivestreams.tck.{SubscriberBlackboxVerification, TestEnvironment}
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 05.02.17 11:26.
   */
-class SubscriberBlackboxVerificationTest extends SubscriberBlackboxVerification[String](new TestEnvironment()) with TestNGSuiteLike
+class SubscriberBlackboxVerificationTest extends SubscriberBlackboxVerification[String](new TestEnvironment(300)) with TestNGSuiteLike
   with ActimeMQConnectionFactoryAware {
 
   val connectionHolder = new ConnectionHolder(connectionFactory)
