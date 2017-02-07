@@ -102,7 +102,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
   }
 
   case class Subscribed(session: Session, producer: MessageProducer, subscription: Subscription)
-    extends Subscriber[T] {
+    extends Subscriber[T] with Runnable {
 
     sealed trait Signal
     case class OnNext(element: T) extends Signal
@@ -125,7 +125,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
 
     private[reajames] def doRequest: Unit = subscription.request(1)
 
-    private def poll(): Unit = {
+    def run: Unit = {
       @tailrec
       def pollWhileNotEmpty: Unit = {
         if (!queue.isEmpty) {
@@ -154,28 +154,20 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
 
       pollWhileNotEmpty
       sending.set(false)
-      if (!queue.isEmpty) runIfNot
+      if (!queue.isEmpty) scheduleRun
     }
 
-    private[reajames] def runIfNot: Unit =
-      if (sending.compareAndSet(false, true)) Future(poll())
+    private[reajames] def scheduleRun: Unit =
+      if (sending.compareAndSet(false, true)) executionContext.execute(this)
 
-    def onNext(element: T): Unit = {
-      if (element == null) throw new NullPointerException("Element should be specified!")
-      queue.offer(OnNext(element))
-      runIfNot
-    }
+    @inline
+    private def signal(signal: Signal) = if (queue.offer(signal)) scheduleRun
 
-    def onError(th: Throwable): Unit = {
-      if (th == null) throw new NullPointerException("Throwable should be specified!")
-      queue.offer(OnError(th))
-      runIfNot
-    }
+    def onNext(element: T): Unit = signal(OnNext(element))
 
-    def onComplete(): Unit = Future {
-      queue.offer(OnComplete)
-      runIfNot
-    }
+    def onError(th: Throwable): Unit = signal(OnError(th))
+
+    def onComplete(): Unit = signal(OnComplete)
 
     def onSubscribe(s: Subscription): Unit = s.cancel() // already subscribed
   }
