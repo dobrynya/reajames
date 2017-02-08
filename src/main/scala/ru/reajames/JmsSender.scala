@@ -125,36 +125,34 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
 
     private[reajames] def doRequest: Unit = subscription.request(1)
 
-    def run: Unit = {
+    @tailrec
+    final def run: Unit = {
       @tailrec
-      def pollWhileNotEmpty: Unit = {
-        if (!queue.isEmpty) {
-          queue.poll() match {
-            case OnNext(elem) =>
-              val (message, destination) = messageFactory(session, elem)
-              send(producer, message, destination) match {
-                case Success(msg) =>
-                  logger.trace("Sent {}", msg)
-                  doRequest
-                case Failure(th) =>
-                  logger.warn(s"Could not send a message to $destination, closing producer!", th)
-                  unsubscribe
-              }
-            case OnError(th) =>
-              logger.warn(s"An error occurred in the upstream, closing producer!", th)
-              unsubscribe
-            case `OnComplete` =>
-              logger.debug("Upstream has been completed, closing {}", producer)
-              unsubscribe
-          }
-
-          pollWhileNotEmpty
+      def pollWhileNotEmpty: Unit =
+        queue.poll() match {
+          case OnNext(elem) =>
+            val (message, destination) = messageFactory(session, elem)
+            send(producer, message, destination) match {
+              case Success(msg) =>
+                logger.trace("Sent {}", msg)
+                doRequest
+                pollWhileNotEmpty
+              case Failure(th) =>
+                logger.warn(s"Could not send a message to $destination, closing producer!", th)
+                unsubscribe
+            }
+          case OnError(th) =>
+            logger.warn(s"An error occurred in the upstream, closing producer!", th)
+            unsubscribe
+          case `OnComplete` =>
+            logger.debug("Upstream has been completed, closing {}", producer)
+            unsubscribe
+          case null => // empty queue
         }
-      }
 
-      pollWhileNotEmpty
-      sending.set(false)
-      if (!queue.isEmpty) scheduleRun
+      try pollWhileNotEmpty
+      finally sending.set(false)
+      if (!queue.isEmpty && sending.compareAndSet(false, true)) run
     }
 
     private[reajames] def scheduleRun: Unit =
