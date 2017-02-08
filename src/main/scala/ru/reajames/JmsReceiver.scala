@@ -5,6 +5,7 @@ import javax.jms._
 import org.reactivestreams._
 import scala.annotation.tailrec
 import scala.util.{Failure, Success}
+import java.util.concurrent.CountDownLatch
 import scala.concurrent.{ExecutionContext, Future}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 
@@ -38,6 +39,7 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
         case Success(jmsSubscription) =>
           logger.debug("Subscribed to {}", destinationFactory)
           subscriber.onSubscribe(jmsSubscription)
+          jmsSubscription.startReceiving
         case Failure(th) =>
           logger.debug(s"Could not subscribe to $destinationFactory", th)
           subscriber.onSubscribe(FailedSubscription)
@@ -63,8 +65,9 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
     */
   class JmsSubscription(connection: Connection, session: Session, consumer: MessageConsumer,
                         var subscriber: Subscriber[_ >: Message]) extends Subscription with Runnable {
-    val cancelled = new AtomicBoolean(false)
-    val requested = new AtomicLong(0)
+    private val cancelled = new AtomicBoolean(false)
+    private val requested = new AtomicLong(0)
+    private val subscribed = new CountDownLatch(1)
 
     def request(n: Long): Unit = {
       logger.trace("Requested {} from {}", n, destinationFactory)
@@ -79,7 +82,12 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
 
     def cancel(): Unit = cancelSubscription()
 
-    def run(): Unit = receiveMessage()
+    def startReceiving: Unit = subscribed.countDown()
+
+    def run(): Unit = {
+      subscribed.await()
+      receiveMessage()
+    }
 
     private def log(msg: => String): PartialFunction[Throwable, Unit] = {
       case th => logger.warn(msg, th)

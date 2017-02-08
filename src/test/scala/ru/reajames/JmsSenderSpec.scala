@@ -19,7 +19,7 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
   val connectionHolder = new ConnectionHolder(connectionFactory)
 
   "Unsubscribed" should "do nothing on all events except onSubscribe" in {
-    val sender = new JmsSender[String](connectionHolder, permanentDestination(Queue("queue-12"))(string2textMessage))
+    val sender = new JmsSender[String](connectionHolder, Queue("queue-12"), string2textMessage)
     sender.onComplete()
     sender.onError(new Exception("Generated exception!"))
     sender.onNext("Test message")
@@ -27,7 +27,7 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
 
   "Unsubscribed" should "throw an exception when no subscription is supplied" in {
     intercept[NullPointerException] {
-      new JmsSender[String](connectionHolder, permanentDestination(Queue("some-queue"))(string2textMessage))
+      new JmsSender[String](connectionHolder, Queue("some-queue"), string2textMessage)
         .onSubscribe(null)
     }
   }
@@ -42,7 +42,7 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
   }
 
   "JmsSender" should "be able to connect the broker only once" in {
-    val sender = new JmsSender[String](connectionHolder, permanentDestination(Queue("queue-13"))(string2textMessage))
+    val sender = new JmsSender[String](connectionHolder, Queue("queue-13"), string2textMessage)
 
     val requestedBySubscription = Promise[Boolean]()
     sender.onSubscribe(new Subscription {
@@ -62,13 +62,12 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
   "JmsSender" should "be able to send messages to a permanently specified destination" in {
     val queue = Queue("queue-14")
 
-    val sender = new JmsSender[String](connectionHolder, permanentDestination(queue)(string2textMessage))
+    val sender = new JmsSender[String](connectionHolder, queue, string2textMessage)
     QueuePublisher(List("message to send")).subscribe(sender)
 
-    failAfter(Span(500, Millis)) {
+    failAfter(Span(1000, Millis)) {
       val received = for {
         c <- connectionHolder.connection
-        _ <- start(c)
         s <- session(c)
         d <- destination(s, queue)
         cons <- consumer(s, d)

@@ -12,7 +12,8 @@ apply plugin: "org.scoverage"
 repositories {
     mavenCentral()
 }
-project.version = "0.1"
+
+project.version = "0.2"
 
 dependencies {
     compile "org.scala-lang:scala-library:2.12+"
@@ -51,6 +52,16 @@ task scaladocJar(type: Jar, dependsOn: scaladoc) {
 artifacts {
     archives sourcesJar
     archives scaladocJar
+}
+
+jar {
+    manifest {
+        attributes(
+                "Implementation-Title": "Reajames",
+                "Implementation-Vendor": "ru.reajames",
+                "Implementation-Version": project.version
+        )
+    }
 }
 
 def pomConfig = {
@@ -110,5 +121,7 @@ bintray {
 }
 
 checkScoverage {
-    minimumRate = 0.5
+    minimumRate = 0.85
 }
+
+check.dependsOn(checkScoverage)
