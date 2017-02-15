@@ -3,7 +3,7 @@ package ru.reajames
 import Jms._
 import org.reactivestreams._
 import scala.annotation.tailrec
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 import javax.jms.{MessageProducer, Session}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -131,14 +131,19 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
       def pollWhileNotEmpty: Unit =
         queue.poll() match {
           case OnNext(elem) =>
-            val (message, destination) = messageFactory(session, elem)
-            send(producer, message, destination) match {
-              case Success(msg) =>
-                logger.trace("Sent {}", msg)
-                doRequest
-                pollWhileNotEmpty
+            Try(messageFactory(session, elem)) match {
+              case Success((message, dest)) =>
+                send(producer, message, dest) match {
+                  case Success(msg) =>
+                    logger.trace("Sent {}", msg)
+                    doRequest
+                    pollWhileNotEmpty
+                  case Failure(th) =>
+                    logger.warn(s"Could not send a message to $dest, closing producer!", th)
+                    unsubscribe
+                }
               case Failure(th) =>
-                logger.warn(s"Could not send a message to $destination, closing producer!", th)
+                logger.warn(s"Could not send a message due to broken message factory, closing producer!", th)
                 unsubscribe
             }
           case OnError(th) =>
