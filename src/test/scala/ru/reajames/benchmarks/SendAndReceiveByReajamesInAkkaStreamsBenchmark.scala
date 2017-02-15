@@ -23,10 +23,9 @@ object SendAndReceiveByReajamesInAkkaStreamsBenchmark extends SendAndReceiveBenc
     def connectionHolder: ConnectionHolder = connection
     override implicit def executionContext: ExecutionContext = system.dispatchers.lookup("akka.stream.default-blocking-io-dispatcher")
 
-    override def sendMessages(messages: List[String]): Future[Unit] = {
+    override def sendMessages(messages: List[String]): Future[Unit] = Future {
       Source(messages)
-        .alsoTo(Sink.fromSubscriber(new JmsSender[String](connectionHolder, queue, string2textMessage)))
-        .runWith(Sink.ignore).map(_ => ())
+        .runWith(Sink.fromSubscriber(new JmsSender[String](connectionHolder, queue, string2textMessage)))
     }
 
     override def receiveMessages(n: Long): Future[List[String]] = {

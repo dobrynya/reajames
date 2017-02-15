@@ -1,14 +1,11 @@
 package ru.reajames
 
-import java.util.concurrent.CountDownLatch
-
 import Jms._
 import javax.jms._
-
 import org.reactivestreams._
-
 import scala.concurrent.{Future, Promise}
 import scala.language.implicitConversions
+import java.util.concurrent.CountDownLatch
 
 /**
   * Provides helpful utilities for testing purposes.
@@ -31,9 +28,9 @@ trait JmsUtilities {
       c <- connection(connectionFactory)
       s <- session(c)
       d <- destination(s, destinationFactory)
-      p <- producer(s, d)
+      p <- producer(s)
     } {
-      messages.foreach(m => send(p, messageFactory(s, m)))
+      messages.foreach(m => send(p, messageFactory(s, m), d))
       close(c)
     }
   }

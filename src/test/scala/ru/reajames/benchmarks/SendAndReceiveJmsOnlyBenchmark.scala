@@ -1,8 +1,6 @@
 package ru.reajames
 package benchmarks
 
-import scala.language.postfixOps
-
 /**
   * Benchmark on producing and consumption by JMS components only.
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
