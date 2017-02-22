@@ -6,21 +6,23 @@ import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
 import javax.jms.{MessageProducer, Session}
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.{ExecutionContext, Future}
+import java.util.concurrent.{ConcurrentLinkedQueue, CopyOnWriteArraySet}
 
 /**
-  * Represents a subscriber in terms of reactive streams. It provides ability to connect a JMS destination and
-  * listen to messages.
+  * Represents a processor in terms of reactive streams. It provides ability to send messages arrived from an upstream
+  * to a JMS destination. Also it can notify subscribers in case of completed/failed upstream or a failure during delivering
+  * messages to a JMS broker.
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 22.12.16 3:49.
   * @param connectionHolder contains connection to create JMS related components
   * @param messageFactory creates JMS messages from data elements and provides destination for messages
   * @param executionContext executes sending messages
+  * @tparam T data element type to be sent
   */
 class JmsSender[T](connectionHolder: ConnectionHolder,
                    messageFactory: DestinationAwareMessageFactory[T])
-                  (implicit executionContext: ExecutionContext) extends Subscriber[T] with Logging {
+                  (implicit executionContext: ExecutionContext) extends Processor[T, Nothing] with Logging {
   require(connectionHolder != null, "Connection holder should be supplied!")
   require(messageFactory != null, "Destination aware message factory should be supplied!")
 
@@ -36,7 +38,18 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
            messageFactory: MessageFactory[T])(implicit executionContext: ExecutionContext) =
     this(connectionHolder, permanentDestination(destination)(messageFactory))
 
-  private[reajames] var state: Subscriber[T] = new Unsubscribed
+  private[reajames] var state: Subscriber[T] = Unsubscribed
+
+  private[reajames] val subscribers = new CopyOnWriteArraySet[CompleteSubscription]()
+
+  def subscribe(subscriber: Subscriber[_]): Unit = {
+    val subscription = new CompleteSubscription(Some(subscriber))
+    subscriber.onSubscribe(subscription)
+    subscribers.add(subscription)
+  }
+
+  private[reajames] def notifySubscribers(cause: Option[Throwable]) =
+    subscribers.forEach(_.completeWith(cause))
 
   def onSubscribe(subscription: Subscription): Unit =
     if (subscription != null) state.onSubscribe(subscription)
@@ -54,7 +67,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     state.onError(th)
   }
 
-  class Unsubscribed extends Subscriber[T] {
+  private[reajames] object Unsubscribed extends Subscriber[T] {
     private[reajames] def tryToConnect(subscription: Subscription) =
       for {
         c <- connectionHolder.connection
@@ -70,7 +83,8 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
         case th =>
           logger.debug("Could not establish connection!", th)
           subscription.cancel()
-          state = new Unsubscribed
+          notifySubscribers(Some(th))
+          state = Unsubscribed
           Future.failed(th)
       })
 
@@ -89,7 +103,6 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     for (subscribed <- subscriber) {
       state = subscribed
       subscribed.doRequest
-      logger.debug("Successfully created a message producer")
     }
 
     def onNext(element: T): Unit = for (s <- subscriber) s.onNext(element)
@@ -112,15 +125,12 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     private[reajames] val sending = new AtomicBoolean(false)
     private[reajames] val queue = new ConcurrentLinkedQueue[Signal]()
 
-    private[reajames] def unsubscribe: Unit = {
+    private[reajames] def unsubscribe(cause: Option[Throwable]): Unit = {
       subscription.cancel()
-      state = new Unsubscribed
-      close(producer).recover {
-        case throwable => logger.warn("An error occurred during closing producer!", throwable)
-      }
-      close(session).recover {
-        case throwable => logger.warn("An error occurred during closing session!", throwable)
-      }
+      state = Unsubscribed
+      notifySubscribers(cause)
+      close(producer) recover log("An error occurred during closing producer!")
+      close(session) recover log("An error occurred during closing session!")
     }
 
     private[reajames] def doRequest: Unit = subscription.request(1)
@@ -140,19 +150,19 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
                     pollWhileNotEmpty
                   case Failure(th) =>
                     logger.warn(s"Could not send a message to $dest, closing producer!", th)
-                    unsubscribe
+                    unsubscribe(Some(th))
                 }
               case Failure(th) =>
                 logger.warn(s"Could not send a message due to broken message factory, closing producer!", th)
-                unsubscribe
+                unsubscribe(Some(th))
             }
           case OnError(th) =>
-            logger.warn(s"An error occurred in the upstream, closing producer!", th)
-            unsubscribe
+            logger.warn(s"An error occurred in the upstream, closing producer $producer!", th)
+            unsubscribe(Some(th))
           case `OnComplete` =>
             logger.debug("Upstream has been completed, closing {}", producer)
-            unsubscribe
-          case null => // empty queue
+            unsubscribe(None)
+          case null => // finish polling when the queue is empty
         }
 
       try pollWhileNotEmpty
@@ -173,5 +183,22 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     def onComplete(): Unit = signal(OnComplete)
 
     def onSubscribe(s: Subscription): Unit = s.cancel() // already subscribed
+  }
+
+  /**
+    * Contains a subscriber to be notified in case of failure/completeness of the upstream or a failure of this JMS sender.
+    * This subscription is not intended to signal onNext, so requests are just ignored.
+    * @param subscriber subscriber to be notified
+    */
+  class CompleteSubscription(var subscriber: Option[Subscriber[_]]) extends Subscription {
+    def request(n: Long): Unit = () // no onNext signal will be emitted
+    def cancel(): Unit = completeWith(None)
+
+    def completeWith(th: Option[Throwable]): Unit =
+      for (s <- subscriber) {
+        th.map(s.onError).getOrElse(s.onComplete())
+        subscribers.remove(this)
+        subscriber = None
+      }
   }
 }

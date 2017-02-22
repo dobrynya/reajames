@@ -4,7 +4,7 @@ import Jms._
 import scala.util._
 import javax.jms.TextMessage
 import scala.concurrent.Promise
-import org.reactivestreams.Subscription
+import org.reactivestreams.{Subscriber, Subscription}
 import org.scalatest._, concurrent._, time._
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -103,7 +103,6 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
         cons <- consumer(s, d)
       } yield {
         val res = (1 to 3).map(_ => receive(cons))
-        close(c)
         res
       }
 
@@ -113,6 +112,71 @@ class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLi
       val messages = received.get.map(_.map(_.map(_.asInstanceOf[TextMessage]).get).get)
       messages.forall(m => m.getText == m.getJMSCorrelationID) should equal(true)
     }
+  }
+
+  "JmsSender" should "allow to subscribe on completed/failed signal" in {
+    val sender = new JmsSender[String](connectionHolder, TemporaryQueue(), string2textMessage)
+
+    sender.subscribe(new Subscriber[Nothing] {
+      def onSubscribe(s: Subscription): Unit = ()
+      def onError(t: Throwable) = throw new Exception("No signal as sender is not subscribed!")
+      def onComplete() = throw new Exception("No signal as sender is not subscribed!")
+      def onNext(t: Nothing) = throw new Exception("No signal as sender is not subscribed!")
+    })
+  }
+
+  "JmsSender" should "notify subscribers on completed stream" in {
+    val sender = new JmsSender[String](connectionHolder, TemporaryQueue(), string2textMessage)
+
+    val completed = Promise[Boolean]
+
+    sender.subscribe(new Subscriber[Nothing] {
+      def onSubscribe(s: Subscription): Unit = ()
+      def onError(th: Throwable): Unit = completed.failure(th)
+      def onComplete(): Unit = completed.success(true)
+      def onNext(t: Nothing): Unit = completed.failure(new IllegalStateException("onNext signal should not be emitted!"))
+    })
+
+    QueuePublisher(List("1")).subscribe(sender)
+    whenReady(completed.future)(_ should equal(true))
+    sender.subscribers shouldBe empty
+  }
+
+  "JmsSender" should "notify subscribers on failed stream" in {
+    val sender = new JmsSender[String](connectionHolder, Queue(null), string2textMessage)
+
+    val completed = Promise[Boolean]
+
+    sender.subscribe(new Subscriber[Nothing] {
+      def onSubscribe(s: Subscription): Unit = ()
+      def onError(th: Throwable): Unit = completed.success(true)
+      def onComplete(): Unit = completed.failure(new IllegalStateException("onComplete signal should not be emitted!"))
+      def onNext(t: Nothing): Unit = completed.failure(new IllegalStateException("onNext signal should not be emitted!"))
+    })
+
+    QueuePublisher(List("1")).subscribe(sender)
+    whenReady(completed.future)(_ should equal(true))
+    sender.subscribers shouldBe empty
+  }
+
+  "JmsSender" should "notify subscribers on failed connection" in {
+    val sender = new JmsSender[String](new ConnectionHolder(failingConnectionFactory), Queue(null), string2textMessage)
+
+    val completed = Promise[Boolean]
+
+    sender.subscribe(new Subscriber[Nothing] {
+      def onSubscribe(s: Subscription): Unit = ()
+      def onError(th: Throwable): Unit = {
+        th.printStackTrace()
+        completed.success(true)
+      }
+      def onComplete(): Unit = completed.failure(new IllegalStateException("onComplete signal should not be emitted!"))
+      def onNext(t: Nothing): Unit = completed.failure(new IllegalStateException("onNext signal should not be emitted!"))
+    })
+
+    QueuePublisher(List("1")).subscribe(sender)
+    whenReady(completed.future)(_ should equal(true))
+    sender.subscribers shouldBe empty
   }
 
   override implicit def patienceConfig = PatienceConfig(Span(500, Millis))

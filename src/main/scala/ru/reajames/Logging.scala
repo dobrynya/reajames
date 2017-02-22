@@ -8,5 +8,9 @@ import org.slf4j._
   *         Created at 22.12.16 1:23.
   */
 trait Logging {
-  val logger: Logger = LoggerFactory.getLogger(getClass)
+  private[reajames] val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  private[reajames] def log(msg: => String): PartialFunction[Throwable, Unit] = {
+    case th => logger.warn(msg, th)
+  }
 }

@@ -51,7 +51,7 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
   /**
     * Represents a failed subscription to pass it to a subscriber.
     */
-  object FailedSubscription extends Subscription {
+  private[reajames] object FailedSubscription extends Subscription {
     def cancel(): Unit = ()
     def request(n: Long): Unit = ()
   }
@@ -72,7 +72,7 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
     def request(n: Long): Unit = {
       logger.trace("Requested {} from {}", n, destinationFactory)
       if (n <= 0)
-        cancelSubscription(Some(new IllegalArgumentException(s"Requested $n elements violating rule 3.9!")))
+        cancel(Some(new IllegalArgumentException(s"Requested $n elements violating rule 3.9!")))
       else {
         val demand = Math.min(Long.MaxValue - requested.get(), n)
         if (requested.getAndAdd(demand) == 0)
@@ -80,7 +80,7 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
       }
     }
 
-    def cancel(): Unit = cancelSubscription()
+    def cancel(): Unit = cancel(None)
 
     def startReceiving: Unit = subscribed.countDown()
 
@@ -89,26 +89,19 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
       receiveMessage()
     }
 
-    private def log(msg: => String): PartialFunction[Throwable, Unit] = {
-      case th => logger.warn(msg, th)
-    }
-
     @inline
     def working = !cancelled.get()
 
-    private[reajames] def cancelSubscription(cause: Option[Throwable] = None): Unit =
+    private[reajames] def cancel(cause: Option[Throwable]): Unit =
       if (cancelled.compareAndSet(false, true)) {
-        for {
-          _ <- close(consumer) recover log("An error occurred during closing consumer!")
-          _ <- close(session) recover log("An error occurred during closing session!")
-        } ()
+        close(consumer) recover log("An error occurred during closing consumer!")
+        close(session) recover log("An error occurred during closing session!")
 
-        cause match {
-          case Some(th) =>
-            logger.warn("Subscription has been cancelled due to an error!", th)
-            subscriber.onError(th)
-          case None =>
-            logger.debug("Cancelled subscription to {}", destinationFactory)
+        cause.map { th =>
+          logger.warn("Subscription has been cancelled due to an error!", th)
+          subscriber.onError(th)
+        } getOrElse {
+          logger.debug("Cancelled subscription to {}", destinationFactory)
         }
 
         subscriber = null // drop subscriber
@@ -125,7 +118,7 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
             } else logger.trace("Discarded {} due to cancelled subscription!")
           }
         case Failure(th) =>
-          cancelSubscription(Some(th))
+          cancel(Some(th))
       }
 
       if (requested.decrementAndGet() > 0 && working) receiveMessage()

@@ -49,31 +49,42 @@ trait JmsUtilities {
       private val allPublished: Promise[Boolean] = Promise()
 
       private var real: Subscriber[_ >: Message] = _
-      private val subscribed = new CountDownLatch(1)
-      private val fake = TestSubscriber(
-        subscribe = subscription => subscribed.countDown(),
-        next = (s, m) => next(m),
-        complete = () => complete(),
-        error = (th) => error(th)
-      )
-      publisher.subscribe(fake)
+      private val clientSubscribed = new CountDownLatch(1)
+      private val subscribedToReceiver = new CountDownLatch(1)
+
+      private var jmsSubscription: Subscription = _
+
+      private val fakeSubscriber = new Subscriber[Message] {
+        def onError(t: Throwable): Unit = error(t)
+
+        def onSubscribe(s: Subscription): Unit = {
+          jmsSubscription = s
+          subscribedToReceiver.countDown()
+          clientSubscribed.await()
+        }
+
+        def onComplete(): Unit = complete()
+
+        def onNext(t: Message): Unit = next(t)
+      }
+
+      publisher.subscribe(fakeSubscriber)
 
       def subscribe(s: Subscriber[_ >: Message]): Unit = {
         real = s
-        subscribed.await()
+        subscribedToReceiver.await()
         s.onSubscribe(new Subscription {
           def cancel(): Unit = {
             whenCancelled()
             real = null
-            fake.subscription.cancel()
+            jmsSubscription.cancel()
           }
-          def request(n: Long): Unit = fake.subscription.request(n)
+          def request(n: Long): Unit = jmsSubscription.request(n)
         })
+        clientSubscribed.countDown()
       }
 
       def cancel(): Unit = complete()
-
-      def request(n: Long): Unit = fake.subscription.request(n)
 
       def next(msg: Message): Unit = {
         real.onNext(msg)
@@ -84,7 +95,7 @@ trait JmsUtilities {
       def error(th: Throwable): Unit = real.onError(th)
 
       def complete(): Unit = {
-        fake.subscription.cancel()
+        jmsSubscription.cancel()
         real.onComplete()
         allPublished.trySuccess(true)
       }

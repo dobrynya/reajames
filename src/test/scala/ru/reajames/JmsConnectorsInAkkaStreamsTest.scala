@@ -1,11 +1,13 @@
 package ru.reajames
 
 import akka.stream.scaladsl._
-import akka.actor.ActorSystem
 import scala.concurrent.Future
+import java.util.concurrent.TimeUnit
 import akka.stream.ActorMaterializer
-import javax.jms.{Message, TextMessage, Session}
+import akka._, pattern.{after => afterDelay}, actor.ActorSystem
 import org.scalatest._, time._, concurrent._
+import javax.jms.{Message, Session, TextMessage}
+import scala.concurrent.duration.FiniteDuration
 
 /**
   * Tests using JMS connectors in the Akka Stream infrastructure.
@@ -120,6 +122,33 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
     Source(messagesToSend).runWith(Sink.fromSubscriber(clientRequests))
 
     whenReady(result) { _ == messagesToSend }
+  }
+
+  "JmsSender" should "allow to detect a failure to recreate a stream" in {
+    val queue = TemporaryQueue()
+    val messages = Iterator("1", "2", "3")
+
+    def createSendingStream(connectionRescheduler: => Future[Boolean]): Future[Done] = {
+      val mf: MessageFactory[String] =
+        (session, element) =>
+          if (element != "1") session.createTextMessage(element)
+          else throw new IllegalArgumentException(s"Could not send $element due to the test case!")
+
+      val sender = new JmsSender(connectionHolder, queue, mf)
+      Source.fromIterator(() => messages).via(Flow.fromProcessor(() => sender)).runWith(Sink.ignore)
+        .recoverWith {
+          case th =>
+            connectionRescheduler.flatMap(_ => createSendingStream(connectionRescheduler))
+        }
+    }
+
+    val sent =
+      createSendingStream(afterDelay(FiniteDuration(100, TimeUnit.MILLISECONDS), system.scheduler)(Future.successful(true)))
+    val received =
+      Source.fromPublisher(new JmsReceiver(connectionHolder, queue)).take(2).collect(extractText).runWith(Sink.seq)
+
+    whenReady(sent, timeout(Span(300, Millis)))(_ should equal(Done))
+    whenReady(received)(_ == Seq("2", "3"))
   }
 
   def extractText: PartialFunction[Message, String] = {
