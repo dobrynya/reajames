@@ -2,12 +2,17 @@ package ru.reajames
 
 import akka.stream.scaladsl._
 import scala.concurrent.Future
-import java.util.concurrent.TimeUnit
 import akka.stream.ActorMaterializer
-import akka._, pattern.{after => afterDelay}, actor.ActorSystem
-import org.scalatest._, time._, concurrent._
+import akka._
+import pattern.{after => afterDelay}
+import actor.ActorSystem
+import org.scalatest._
+import time._
+import concurrent._
 import javax.jms.{Message, Session, TextMessage}
-import scala.concurrent.duration.FiniteDuration
+import akka.stream.ThrottleMode.Shaping
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 /**
   * Tests using JMS connectors in the Akka Stream infrastructure.
@@ -135,20 +140,39 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
           else throw new IllegalArgumentException(s"Could not send $element due to the test case!")
 
       val sender = new JmsSender(connectionHolder, queue, mf)
-      Source.fromIterator(() => messages).via(Flow.fromProcessor(() => sender)).runWith(Sink.ignore)
+      Source.fromIterator(() => messages)
+        .throttle(1, 50 millis, 1, Shaping)
+        .via(Flow.fromProcessor(() => sender))
+        .runWith(Sink.ignore)
         .recoverWith {
           case th =>
             connectionRescheduler.flatMap(_ => createSendingStream(connectionRescheduler))
         }
     }
 
+    var toBeTaken = 2
+
+    def createReceivingStream(rescheduler: => Future[_]): Future[Seq[String]] = {
+      Source.fromPublisher(new JmsReceiver(connectionHolder, queue))
+        .take(toBeTaken)
+        .collect(extractText)
+        .filter(s => if (s != "2") true else throw new IllegalArgumentException(s"Could not process $s due to the test case!"))
+        .runWith(Sink.seq)
+        .recoverWith {
+          case th =>
+            th.printStackTrace()
+            toBeTaken -= 1
+            rescheduler.flatMap(_ => createReceivingStream(rescheduler))
+        }
+    }
+
     val sent =
-      createSendingStream(afterDelay(FiniteDuration(100, TimeUnit.MILLISECONDS), system.scheduler)(Future.successful(true)))
+      createSendingStream(afterDelay(100 millis, system.scheduler)(Future.successful(true)))
     val received =
-      Source.fromPublisher(new JmsReceiver(connectionHolder, queue)).take(2).collect(extractText).runWith(Sink.seq)
+      createReceivingStream(afterDelay(100 millis, system.scheduler)(Future.successful(true)))
 
     whenReady(sent, timeout(Span(300, Millis)))(_ should equal(Done))
-    whenReady(received)(_ == Seq("2", "3"))
+    whenReady(received, timeout(Span(1000, Millis)))(_ == Seq("3"))
   }
 
   def extractText: PartialFunction[Message, String] = {

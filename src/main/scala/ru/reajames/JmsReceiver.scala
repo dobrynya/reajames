@@ -109,16 +109,13 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
 
     @tailrec
     private def receiveMessage(): Unit = {
-      receive(consumer) match {
-        case Success(received) =>
-          received.foreach { msg =>
-            if (working) {
-              logger.trace("Received {}", msg)
-              subscriber.onNext(msg)
-            } else logger.trace("Discarded {} due to cancelled subscription!")
-          }
-        case Failure(th) =>
-          cancel(Some(th))
+      receive(consumer).map {
+        _.foreach { msg =>
+          logger.trace("Received {}", msg)
+          subscriber.onNext(msg)
+        }
+      } recover {
+        case th => cancel(Some(th))
       }
 
       if (requested.decrementAndGet() > 0 && working) receiveMessage()
