@@ -29,7 +29,7 @@ import concurrent.ExecutionContext.Implicits.global
 
 def connectionFactory: ConnectionFactory
 
-def publisher: Publisher[Data]
+def publisher: Publisher[String]
 
 publisher.subscribe(
   new JmsSender(new ConnectionHolder(connectionFactory), Topic("events"), string2textMessage)

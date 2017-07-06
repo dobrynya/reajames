@@ -11,7 +11,7 @@ import javax.jms.{Destination => JmsDestination, _}
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 20.12.16 0:36.
   */
-trait JmsSpec extends Matchers { this: FlatSpec =>
+trait JmsSpec extends Matchers with JmsUtilities { this: FlatSpec =>
   def connectionFactory: ConnectionFactory
   def failingConnectionFactory: ConnectionFactory
 

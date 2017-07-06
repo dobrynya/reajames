@@ -46,9 +46,11 @@ package object reajames {
     * Creates a destination and caches it for future use. This component should not be used concurrently.
     */
   trait CachingDestinationFactory extends DestinationFactory {
-    private val cached = new AtomicReference[JmsDestination]()
+    private[reajames] val cached = new AtomicReference[JmsDestination]()
 
     private[reajames] def create(session: Session): JmsDestination
+    private[reajames] def destinationName: Option[String]
+    private[reajames] def destinationType: String
 
     def apply(session: Session): JmsDestination = {
       if (cached.get() == null) cached.compareAndSet(null, create(session))
@@ -56,14 +58,17 @@ package object reajames {
     }
 
     override def toString(): String =
-      "CachingDestinationFactory(%s)".format(if (cached != null) cached.toString else "uninitialized")
+      "%s(%s)".format(destinationType,
+        destinationName.getOrElse(if (cached.get != null) cached.toString else "uninitialized"))
   }
 
   /**
     * Creates a temporary queue and caches it for later use.
     */
   object TemporaryQueue {
-    def apply(): DestinationFactory = new DestinationFactory with CachingDestinationFactory {
+    def apply(name: Option[String] = None): DestinationFactory = new DestinationFactory with CachingDestinationFactory {
+      private[reajames] def destinationName = name
+      private[reajames] def destinationType = "TemporaryQueue"
       private[reajames] def create(session: Session) = session.createTemporaryQueue()
     }
   }
@@ -72,7 +77,9 @@ package object reajames {
     * Creates a temporary topic and caches it for later use.
     */
   object TemporaryTopic {
-    def apply(): DestinationFactory = new DestinationFactory with CachingDestinationFactory {
+    def apply(name: Option[String] = None): DestinationFactory = new DestinationFactory with CachingDestinationFactory {
+      private[reajames] def destinationName = name
+      private[reajames] def destinationType = "TemporaryTopic"
       private[reajames] def create(session: Session) = session.createTemporaryTopic()
     }
   }

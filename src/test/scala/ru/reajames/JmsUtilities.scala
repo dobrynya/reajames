@@ -2,6 +2,7 @@ package ru.reajames
 
 import Jms._
 import javax.jms._
+import scala.util.Try
 import org.reactivestreams._
 import scala.concurrent.{Future, Promise}
 import scala.language.implicitConversions
@@ -13,6 +14,24 @@ import java.util.concurrent.CountDownLatch
   *         Created at 22.12.16 2:03.
   */
 trait JmsUtilities {
+  /**
+    * Creates a connection with the specified connection factory.
+    * @param connectionFactory specifies a factory for connection
+    * @param credentials specifies user name and password
+    * @param clientId specifies client identifier to set on created connection
+    * @return created connection or failure
+    */
+  def connection(connectionFactory: ConnectionFactory,
+                 credentials: Option[(String, String)] = None, clientId: Option[String] = None): Try[Connection] = Try {
+    credentials
+      .map {
+        case (user, passwd) => connectionFactory.createConnection(user, passwd)
+      }.getOrElse(connectionFactory.createConnection())
+  }.map { c =>
+    clientId.foreach(c.setClientID)
+    c
+  }
+
   /**
     * Sends messages to the specified destination and closes connection.
     * @param messages messages to be sent

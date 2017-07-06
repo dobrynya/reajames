@@ -9,25 +9,6 @@ import javax.jms.{Destination => JmsDestination, _}
   *         Created at 19.12.16 23:24.
   */
 object Jms {
-
-  /**
-    * Creates a connection with the specified connection factory.
-    * @param connectionFactory specifies a factory for connection
-    * @param credentials specifies user name and password
-    * @param clientId specifies client identifier to set on created connection
-    * @return created connection or failure
-    */
-  def connection(connectionFactory: ConnectionFactory,
-                 credentials: Option[(String, String)] = None, clientId: Option[String] = None): Try[Connection] = Try {
-    credentials
-      .map {
-        case (user, passwd) => connectionFactory.createConnection(user, passwd)
-      }.getOrElse(connectionFactory.createConnection())
-  }.map { c =>
-    clientId.foreach(c.setClientID)
-    c
-  }
-
   /**
     * Starts the specified connection to be able to deliver messages
     * @param connection specifies connection to start

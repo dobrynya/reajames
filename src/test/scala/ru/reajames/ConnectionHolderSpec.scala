@@ -9,17 +9,17 @@ import org.scalatest._
   */
 class ConnectionHolderSpec extends FlatSpec with Matchers with ActimeMQConnectionFactoryAware {
   "Connection holder" should "create connection using supplied ConnectionFactory" in {
-    val holder = new ConnectionHolder(connectionFactory, Some("sa" -> ""), Some("new-client-id"))
+    val holder = new ConnectionHolder(connectionFactory, Some("TestConnection"), Some("sa" -> ""), Some("new-client-id"))
     holder.connection.isSuccess should equal(true)
   }
 
   it should "create connection using provided connection constructor" in {
-    val holder = new ConnectionHolder(connectionFactory.createConnection())
+    val holder = new ConnectionHolder(connectionFactory.createConnection(), None)
     holder.connection.isSuccess should equal(true)
   }
 
   it should "release connection" in {
-    new ConnectionHolder(connectionFactory.createConnection()).release()
+    new ConnectionHolder(connectionFactory.createConnection(), None).release()
   }
 
   it should "log if failed" in {

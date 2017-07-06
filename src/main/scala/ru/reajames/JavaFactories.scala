@@ -20,6 +20,15 @@ object JavaFactories {
   def connectionHolder(connectionFactory: ConnectionFactory): ConnectionHolder = new ConnectionHolder(connectionFactory)
 
   /**
+    * Creates a new connection holder using provided connection factory.
+    * @param name specifies name of a connection to be logged
+    * @param connectionFactory connection factory to create connection by
+    * @return a newly created connection holder
+    */
+  def connectionHolder(name: String, connectionFactory: ConnectionFactory) =
+    new ConnectionHolder(connectionFactory, Some(name))
+
+  /**
     * Creates a new connection holder using provided connection factory and user credentials.
     * @param connectionFactory connection factory to create connection by
     * @param user specifies a user to create connection
@@ -27,7 +36,18 @@ object JavaFactories {
     * @return a newly created connection holder
     */
   def connectionHolder(connectionFactory: ConnectionFactory, user: String, password: String): ConnectionHolder =
-    new ConnectionHolder(connectionFactory, Some(user -> password))
+    new ConnectionHolder(connectionFactory, None, Some(user -> password))
+
+  /**
+    * Creates a new connection holder using provided connection factory and user credentials.
+    * @param name specifies name of a connection to be logged
+    * @param connectionFactory connection factory to create a connection by
+    * @param user specifies a user to create connection
+    * @param password specifies a password to create connection
+    * @return a newly created connection holder
+    */
+  def connectionHolder(name: String, connectionFactory: ConnectionFactory, user: String, password: String): ConnectionHolder =
+    new ConnectionHolder(connectionFactory, Some(name), Some(user -> password))
 
   /**
     * Creates a new connection holder using provided connection factory and user credentials.
@@ -38,7 +58,19 @@ object JavaFactories {
     * @return a newly created connection holder
     */
   def connectionHolder(connectionFactory: ConnectionFactory, clientId: String, user: String, password: String): ConnectionHolder =
-    new ConnectionHolder(connectionFactory, Some(user -> password), Some(clientId))
+    new ConnectionHolder(connectionFactory, None, Some(user -> password), Some(clientId))
+
+  /**
+    * Creates a new connection holder using provided connection factory and user credentials.
+    * @param name specifies name of a connection to be logged
+    * @param connectionFactory connection factory to create connection by
+    * @param clientId specifies client identifier to assign created connection
+    * @param user specifies a user to create connection
+    * @param password specifies a password to create connection
+    * @return a newly created connection holder
+    */
+  def connectionHolder(name: String, connectionFactory: ConnectionFactory, clientId: String, user: String, password: String): ConnectionHolder =
+    new ConnectionHolder(connectionFactory, Some(name), Some(user -> password), Some(clientId))
 
   /**
     * Creates a queue.
