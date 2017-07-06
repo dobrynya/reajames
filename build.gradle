@@ -18,7 +18,7 @@ project.version = "0.3"
 dependencies {
     compile "org.scala-lang:scala-library:2.12+"
     compile "org.reactivestreams:reactive-streams:1.0.0.final"
-    compile "org.slf4j:slf4j-api:+"
+    compile "org.slf4j:slf4j-api:1.7+"
     compile "org.apache.geronimo.specs:geronimo-jms_1.1_spec:1.1+"
 
     testCompile "org.scalatest:scalatest_2.12:3+"
@@ -32,7 +32,7 @@ dependencies {
     }
     testCompile "org.reactivestreams:reactive-streams-tck:1.0.0.final"
     testRuntime "ch.qos.logback:logback-classic:+"
-    testRuntime "org.slf4j:log4j-over-slf4j:+"
+    testRuntime "org.slf4j:log4j-over-slf4j:1.6+"
     testRuntime "org.pegdown:pegdown:1.6.0"
 
     scoverage "org.scoverage:scalac-scoverage-plugin_2.12:+",

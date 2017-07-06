@@ -1,11 +1,12 @@
 package ru.reajames
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.scalatest._
-import javax.jms.TextMessage
 import scala.concurrent.Await
+import javax.jms.{Message, TextMessage}
 import scala.concurrent.duration.Duration
 import java.util.concurrent.atomic.AtomicBoolean
+import org.reactivestreams.{Subscriber, Subscription}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -134,5 +135,20 @@ class JmsReceiverSpec extends FlatSpec with Matchers with JmsUtilities with Acti
 
     res1 should equal(msgs.reverse)
     res2 should equal(msgs.reverse)
+  }
+
+  it should "supply failed subscription" in {
+    val failedPublisher = new JmsReceiver(new ConnectionHolder(failingConnectionFactory), TemporaryQueue())
+
+    failedPublisher.subscribe(new Subscriber[Message] {
+      def onError(th: Throwable): Unit = failedPublisher.logger.debug("Generated exception!", th)
+      def onComplete(): Unit = ???
+      def onNext(message: Message): Unit = ???
+      def onSubscribe(s: Subscription): Unit = {
+        s.request(1)
+        s.cancel()
+        assert(s === failedPublisher.FailedSubscription)
+      }
+    })
   }
 }
