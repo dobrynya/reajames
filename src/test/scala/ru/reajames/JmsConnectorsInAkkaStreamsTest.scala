@@ -38,7 +38,7 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
 
     sendMessages(messagesToBeSent, string2textMessage, queue)
 
-    whenReady(received) {
+    whenReady(received, timeout(Span(5, Seconds))) {
       _.toList == messagesToBeSent.take(25)
     }
   }
@@ -103,7 +103,7 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
     val sender = new JmsSender(connectionHolder, Queue("in"), replyToElemName)
     Source(messagesToSend).runWith(Sink.fromSubscriber(sender))
 
-    whenReady(messagesReceivedByClients, timeout(Span(15, Seconds))) {
+    whenReady(messagesReceivedByClients, timeout(Span(5, Seconds))) {
       _ == messagesToSend
     }
   }
@@ -126,7 +126,7 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
     val clientRequests = new JmsSender[String](connectionHolder, serverIn, enrichReplyTo(clientIn)(string2textMessage))
     Source(messagesToSend).runWith(Sink.fromSubscriber(clientRequests))
 
-    whenReady(result) { _ == messagesToSend }
+    whenReady(result, timeout(Span(5, Seconds))) { _ == messagesToSend }
   }
 
   "JmsSender" should "allow to detect a failure to recreate a stream" in {
@@ -171,8 +171,8 @@ class JmsConnectorsInAkkaStreamsTest extends FlatSpec with Matchers with BeforeA
     val received =
       createReceivingStream(afterDelay(100 millis, system.scheduler)(Future.successful(true)))
 
-    whenReady(sent, timeout(Span(300, Millis)))(_ should equal(Done))
-    whenReady(received, timeout(Span(1000, Millis)))(_ == Seq("3"))
+    whenReady(sent, timeout(Span(1, Second)))(_ should equal(Done))
+    whenReady(received, timeout(Span(1, Second)))(_ == Seq("3"))
   }
 
   def extractText: PartialFunction[Message, String] = {

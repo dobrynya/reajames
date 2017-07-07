@@ -11,9 +11,14 @@ apply plugin: "org.scoverage"
 
 repositories {
     mavenCentral()
+    maven { url "https://jitpack.io" }
 }
 
 project.version = "0.3"
+
+configurations {
+    codacy
+}
 
 dependencies {
     compile "org.scala-lang:scala-library:2.12+"
@@ -37,6 +42,14 @@ dependencies {
 
     scoverage "org.scoverage:scalac-scoverage-plugin_2.12:+",
               "org.scoverage:scalac-scoverage-runtime_2.12:+"
+
+    codacy "com.github.codacy:codacy-coverage-reporter:-SNAPSHOT"
+}
+
+task sendCoverageToCodacy(type: JavaExec, dependsOn: checkScoverage) {
+    main = "com.codacy.CodacyCoverageReporter"
+    classpath = configurations.codacy
+    args = ["-l", "Scala", "-r", "${buildDir}/reports/scoverage/cobertura.xml"]
 }
 
 task sourcesJar(type: Jar, dependsOn: classes) {
@@ -124,4 +137,4 @@ checkScoverage {
     minimumRate = 0.85
 }
 
-check.dependsOn(checkScoverage)
+check.dependsOn(sendCoverageToCodacy)

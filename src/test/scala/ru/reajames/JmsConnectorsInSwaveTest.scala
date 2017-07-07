@@ -29,7 +29,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
 
     sendMessages(messagesToBeSent, string2textMessage, queue)
 
-    whenReady(received, timeout(Span(500, Millis))) {
+    whenReady(received, timeout(Span(5, Seconds))) {
       _ == messagesToBeSent.take(25)
     }
   }
@@ -96,7 +96,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
     val sender = new JmsSender[String](connectionHolder, sendReplyToHeader)
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(sender))
 
-    whenReady(messagesReceivedByClients, timeout(Span(300, Millis))) {
+    whenReady(messagesReceivedByClients, timeout(Span(5, Seconds))) {
       _ == messagesToSend
     }
   }
@@ -121,7 +121,7 @@ class JmsConnectorsInSwaveTest extends FlatSpec with Matchers with BeforeAndAfte
       new JmsSender[String](connectionHolder, serverIn, enrichReplyTo(clientIn)(string2textMessage))
     Spout(messagesToSend).drainTo(Drain.fromSubscriber(clientRequests))
 
-    whenReady(result, timeout(Span(300, Millis))) { _ == messagesToSend }
+    whenReady(result, timeout(Span(5, Seconds))) { _ == messagesToSend }
   }
 
   def extractText: PartialFunction[Message, String] = {
