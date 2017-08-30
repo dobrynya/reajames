@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
   * @param destinationFactory specifies source of messages
   * @param executionContext executes receiving messages
   */
-class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: DestinationFactory)
+class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: DestinationFactory, acknowledgeMode: Int = Session.AUTO_ACKNOWLEDGE)
                  (implicit executionContext: ExecutionContext) extends Publisher[Message] with Logging {
   require(connectionHolder != null, "Connection holder should be supplied!")
   require(destinationFactory != null, "Destination factory should be supplied!")
@@ -29,7 +29,7 @@ class JmsReceiver(connectionHolder: ConnectionHolder, destinationFactory: Destin
     Future {
       val subscription = for {
         c <- connectionHolder.connection
-        s <- session(c)
+        s <- session(c, acknowledgeMode)
         d <- destination(s, destinationFactory)
         consumer <- consumer(s, d)
       }
