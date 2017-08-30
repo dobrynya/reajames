@@ -58,7 +58,7 @@ public class JavaFactoriesTest extends TestNGSuite {
         });
 
         Connection c = connectionHolder.connection().get();
-        Session s = session(c, false, 1).get();
+        Session s = session(c, 1).get();
         MessageProducer p = producer(s, q.apply(s)).get();
         for (int i = 1; i <= 5; i++)
             send(p, textMessage(s, "" + i));
@@ -74,7 +74,7 @@ public class JavaFactoriesTest extends TestNGSuite {
         JmsSender<String> sender = createSender(connectionHolder, q, JavaFactories::textMessage, executor);
 
         Connection c = connectionHolder.connection().get();
-        Session s = session(c, false, 1).get();
+        Session s = session(c, 1).get();
         MessageConsumer cons = consumer(s, q.apply(s)).get();
 
         new Publisher<String>() {

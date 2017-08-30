@@ -54,13 +54,17 @@ object Jms {
   /**
     * Creates a session by the specified connection.
     * @param connection specifies connection to create a session
-    * @param transacted specifies whether created session is transaction aware or not
-    * @param acknowledgeMode specifies acknowledge mode
+    * @param acknowledgeMode specifies acknowledge mode or if the session is transaction aware
     * @return created session or failure
     */
-  def session(connection: Connection, transacted: Boolean = false,
-              acknowledgeMode: Int = Session.AUTO_ACKNOWLEDGE): Try[Session] =
-    Try(connection.createSession(transacted, acknowledgeMode))
+  def session(connection: Connection, acknowledgeMode: Int = Session.AUTO_ACKNOWLEDGE): Try[Session] = {
+    Try(acknowledgeMode match {
+      case Session.SESSION_TRANSACTED =>
+        connection.createSession(true, acknowledgeMode)
+      case _ =>
+        connection.createSession(false, acknowledgeMode)
+    })
+  }
 
 
   /**
