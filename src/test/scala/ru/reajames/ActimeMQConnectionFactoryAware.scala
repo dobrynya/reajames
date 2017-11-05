@@ -9,13 +9,26 @@ import org.apache.activemq.ActiveMQConnectionFactory
   *         Created at 17.01.17 12:58.
   */
 trait ActimeMQConnectionFactoryAware {
+  import ActiveMQStarter._
+
+  brokerService.getVmConnectorURI
+
+  implicit val connectionFactory = new ActiveMQConnectionFactory("vm://localhost")
+
+  val holder = new ConnectionHolder(connectionFactory)
+
+  (for {
+    c <- holder.connection
+    s <- Jms.session(c)
+  } yield s).foreach(println)
+
+  def failingConnectionFactory = new ActiveMQConnectionFactory("tcp://non-existent-host:61616")
+}
+
+object ActiveMQStarter {
   val brokerService = new BrokerService()
   brokerService.setUseJmx(false)
   brokerService.setPersistent(false)
   brokerService.setUseShutdownHook(false)
   brokerService.start()
-
-  implicit val connectionFactory = new ActiveMQConnectionFactory("vm://localhost")
-
-  def failingConnectionFactory = new ActiveMQConnectionFactory("tcp://non-existent-host:61616")
 }

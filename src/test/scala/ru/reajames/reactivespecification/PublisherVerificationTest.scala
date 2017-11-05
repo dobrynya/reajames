@@ -18,8 +18,6 @@ class PublisherVerificationTest extends PublisherVerification[Message](new TestE
   JmsUtilities with ActimeMQConnectionFactoryAware with TestNGSuiteLike {
   val counter = new AtomicInteger()
 
-  val holder = new ConnectionHolder(connectionFactory)
-
   def createPublisher(elements: Long): Publisher[Message] = {
     val queue = Queue("publisher-verification-%s" format counter.incrementAndGet())
     val messages = 1L to elements
