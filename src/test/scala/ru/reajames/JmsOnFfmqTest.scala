@@ -13,14 +13,13 @@ import net.timewalker.ffmq4.jndi.FFMQConnectionFactory
   * @author Dmitry Dobrynin <dobrynya@inbox.ru>
   *         Created at 27.12.16 23:22.
   */
-class JmsOnFfmqTest extends FlatSpec with JmsSpec with BeforeAndAfterAll {
-  val connectionFactory =
-    new FFMQConnectionFactory(new JHT[String, AnyRef](Map("java.naming.provider.url" -> "vm://test-broker").asJava))
+class JmsOnFfmqTest extends FlatSpec with JmsSpec with BeforeAndAfterAll with FfmqConnectionFactoryAware {
 
-  def failingConnectionFactory =
-    new FFMQConnectionFactory(new JHT[String, AnyRef](Map("java.naming.provider.url" -> "failing://failing-broker").asJava))
+  override protected def afterAll(): Unit = stopBroker()
+}
 
-  private val broker = {
+trait FfmqConnectionFactoryAware {
+  private[reajames] val broker = {
     val externalProperties = new Properties()
     externalProperties.load(getClass.getResourceAsStream("/ffmq/ffmq-server.properties"))
     val engine = new FFMQEngine("test-broker", new Settings(externalProperties))
@@ -28,5 +27,11 @@ class JmsOnFfmqTest extends FlatSpec with JmsSpec with BeforeAndAfterAll {
     engine
   }
 
-  override protected def afterAll(): Unit = broker.undeploy()
+  def failingConnectionFactory =
+    new FFMQConnectionFactory(new JHT[String, AnyRef](Map("java.naming.provider.url" -> "failing://failing-broker").asJava))
+
+  implicit val connectionFactory =
+    new FFMQConnectionFactory(new JHT[String, AnyRef](Map("java.naming.provider.url" -> "vm://test-broker").asJava))
+
+  def stopBroker(): Unit = broker.undeploy()
 }

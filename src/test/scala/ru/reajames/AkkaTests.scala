@@ -47,5 +47,8 @@ class AkkaTests extends ReajamesStreamTests {
   def delayFor100ms: Future[_] =
     akka.pattern.after(100 millis, system.scheduler)(Future.successful(true))
 
-  override protected def afterAll(): Unit = system.terminate()
+  override protected def afterAll(): Unit = {
+    super.afterAll()
+    system.terminate()
+  }
 }

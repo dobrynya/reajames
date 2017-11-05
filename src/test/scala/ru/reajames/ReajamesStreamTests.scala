@@ -13,7 +13,7 @@ import javax.jms.{Message, Session, TextMessage, Destination => JDestination}
   * Common tests for testing in a stream environment.
   */
 trait ReajamesStreamTests extends FlatSpecLike with Matchers with BeforeAndAfterAll with ScalaFutures
-  with ActimeMQConnectionFactoryAware {
+  with FfmqConnectionFactoryAware {
 
   val connectionHolder = new ConnectionHolder(connectionFactory, Some("embedded-amq"))
 
@@ -155,8 +155,12 @@ trait ReajamesStreamTests extends FlatSpecLike with Matchers with BeforeAndAfter
     whenReady(received, timeout(Span(30, Seconds)))(_ == List("2"))
   }
 
+
+  override protected def afterAll(): Unit = stopBroker()
+
   /**
     * Helper function for extracting text and JMSReplyTo header.
+ *
     * @return payload and JMSReplyTo
     */
   def extractTextAndJMSReplyTo: PartialFunction[Message, (String, JDestination)] = {

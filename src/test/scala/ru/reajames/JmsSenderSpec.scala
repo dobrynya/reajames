@@ -14,7 +14,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
   *         Created at 16.01.17 15:38.
   */
 class JmsSenderSpec extends FlatSpec with Matchers with ScalaFutures with TimeLimits
-  with ActimeMQConnectionFactoryAware with JmsUtilities {
+  with FfmqConnectionFactoryAware with JmsUtilities {
 
   val connectionHolder = new ConnectionHolder(connectionFactory)
 

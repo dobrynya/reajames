@@ -44,5 +44,8 @@ class SwaveTests extends ReajamesStreamTests {
     promise.future
   }
 
-  override protected def afterAll(): Unit = env.shutdown()
+  override protected def afterAll(): Unit = {
+    env.shutdown()
+    super.afterAll()
+  }
 }
