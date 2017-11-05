@@ -11,8 +11,8 @@ More details in [wiki](https://github.com/dobrynya/reajames/wiki). Ideas, improv
 To subscribe a listener for a queue
 
 ```scala
-import javax.jms._
 import ru.reajames._
+import javax.jms.ConnectionFactory
 import concurrent.ExecutionContext.Implicits.global
 
 def connectionFactory: ConnectionFactory
@@ -21,10 +21,10 @@ new JmsReceiver(new ConnectionHolder(connectionFactory), Queue("in-queue"))
   .subscribe(new OnNextSubscriber(message => println(message)))
 ```
 
-To send messages to a topic
+To send text messages to a topic
 ```scala
-import javax.jms._
 import ru.reajames._
+import javax.jms.ConnectionFactory
 import concurrent.ExecutionContext.Implicits.global
 
 def connectionFactory: ConnectionFactory

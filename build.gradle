@@ -14,7 +14,7 @@ repositories {
     maven { url "https://jitpack.io" }
 }
 
-project.version = "0.3"
+project.version = "0.4"
 
 configurations {
     codacy
@@ -28,9 +28,11 @@ dependencies {
 
     testCompile "org.scalatest:scalatest_2.12:3+"
     testCompile "org.apache.activemq:activemq-broker:+"
+    testCompile "org.apache.activemq:activemq-kahadb-store:+"
     testCompile "com.typesafe.akka:akka-stream_2.12:2.4+"
     testCompile "io.swave:swave-core_2.12:+"
     testCompile "com.storm-enroute:scalameter_2.12:0.8.2"
+    testCompile "io.monix:monix_2.12:2.3.0"
     testCompile("net.timewalker.ffmq:ffmq4-server:4.0.0") {
         exclude module: "jms"
         exclude module: "log4j"
@@ -44,6 +46,10 @@ dependencies {
               "org.scoverage:scalac-scoverage-runtime_2.12:+"
 
     codacy "com.github.codacy:codacy-coverage-reporter:-SNAPSHOT"
+}
+
+test {
+    maxParallelForks = 1
 }
 
 task sendCoverageToCodacy(type: JavaExec, dependsOn: checkScoverage) {

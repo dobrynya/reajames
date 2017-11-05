@@ -15,7 +15,7 @@ import scala.concurrent.{Await, ExecutionContext, Future}
   */
 trait SendAndReceive extends Logging {
   def connectionHolder: ConnectionHolder
-  implicit def executionContext: ExecutionContext = ExecutionContext.Implicits.global
+  implicit def executionContext: ExecutionContext = ReajamesStreamTests.executionContext
 
   val queue = Queue("performance-in")
 

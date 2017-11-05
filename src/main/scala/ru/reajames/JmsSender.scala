@@ -17,11 +17,15 @@ import java.util.concurrent.{ConcurrentLinkedQueue, CopyOnWriteArraySet}
   *         Created at 22.12.16 3:49.
   * @param connectionHolder contains connection to create JMS related components
   * @param messageFactory creates JMS messages from data elements and provides destination for messages
+  * @param acknowledgeMode specifies acknowledgement mode for a session to be created
+  * @param name specifies name of a sender for logging purpose
   * @param executionContext executes sending messages
   * @tparam T data element type to be sent
   */
 class JmsSender[T](connectionHolder: ConnectionHolder,
-                   messageFactory: DestinationAwareMessageFactory[T])
+                   messageFactory: DestinationAwareMessageFactory[T],
+                   acknowledgeMode: Int = Session.AUTO_ACKNOWLEDGE,
+                   name: Option[String] = None)
                   (implicit executionContext: ExecutionContext) extends Processor[T, Nothing] with Logging {
   require(connectionHolder != null, "Connection holder should be supplied!")
   require(messageFactory != null, "Destination aware message factory should be supplied!")
@@ -31,12 +35,27 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     * @param connectionHolder connection holder
     * @param destination destination for messages
     * @param messageFactory message factory
+    * @param acknowledgeMode specifies acknowledgement mode for a session to be created
+    * @param executionContext executes sending messages
+    * @return created sender
+    */
+  def this(connectionHolder: ConnectionHolder, destination: DestinationFactory,
+           messageFactory: MessageFactory[T],
+           acknowledgeMode: Int)(implicit executionContext: ExecutionContext) =
+    this(connectionHolder, permanentDestination(destination)(messageFactory), acknowledgeMode)
+
+  /**
+    * Creates a JMS sender to send messages with auto-acknowledgement to a permanent destination.
+    * @param connectionHolder connection holder
+    * @param destination destination for messages
+    * @param messageFactory message factory
     * @param executionContext executes sending messages
     * @return created sender
     */
   def this(connectionHolder: ConnectionHolder, destination: DestinationFactory,
            messageFactory: MessageFactory[T])(implicit executionContext: ExecutionContext) =
-    this(connectionHolder, permanentDestination(destination)(messageFactory))
+    this(connectionHolder, destination, messageFactory, Session.AUTO_ACKNOWLEDGE)
+
 
   private[reajames] var state: Subscriber[T] = Unsubscribed
 
@@ -48,7 +67,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     subscribers.add(subscription)
   }
 
-  private[reajames] def notifySubscribers(cause: Option[Throwable]) =
+  private[reajames] def notifySubscribers(cause: Option[Throwable]): Unit =
     subscribers.forEach(_.completeWith(cause))
 
   def onSubscribe(subscription: Subscription): Unit =
@@ -71,10 +90,10 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
     private[reajames] def tryToConnect(subscription: Subscription) =
       for {
         c <- connectionHolder.connection
-        s <- session(c)
+        s <- session(c, acknowledgeMode)
         p <- producer(s)
       } yield {
-        logger.debug("Successfully created producer {}", p)
+        logger.debug("Successfully created producer {}", name.getOrElse(p))
         Subscribed(s, p, subscription)
       }
 
@@ -174,7 +193,7 @@ class JmsSender[T](connectionHolder: ConnectionHolder,
       if (sending.compareAndSet(false, true)) executionContext.execute(this)
 
     @inline
-    private def signal(signal: Signal) = if (queue.offer(signal)) scheduleRun
+    private def signal(signal: Signal): Unit = if (queue.offer(signal)) scheduleRun
 
     def onNext(element: T): Unit = signal(OnNext(element))
 
